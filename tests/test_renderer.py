@@ -4,6 +4,9 @@ import sys
 
 import pytest
 
+# macOS-Renderer (AppleScript); Windows hat core/renderer_win.py mit eigenen Tests
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="macOS-Renderer")
+
 
 @pytest.fixture(autouse=True)
 def _files_exist(monkeypatch):
