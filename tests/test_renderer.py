@@ -57,3 +57,25 @@ def test_apple_script_compiles():
     out = fh.name + ".scpt"
     r = subprocess.run(["osacompile", "-o", out, fh.name], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_umlaut_set_name_matches_window_title(tmp_path, monkeypatch):
+    """Dateiname zerlegt (NFD), Fenstertitel zusammengesetzt (NFC): muss trotzdem erkannt werden."""
+    import unicodedata
+    out = tmp_path / "r"
+    def fake_run(cmd, **kw):
+        class R: returncode = 0; stdout = ""; stderr = ""
+        if cmd[0] == "osascript" and 'keystroke "r"' in cmd[2]:
+            (out / "00007_Buecherschrank.mp3").write_bytes(b"ID3" + b"0" * 2048)
+        return R()
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+    monkeypatch.setattr(renderer, "_front_window_title", lambda: "Bücherschrank  - Ableton Live 12 Suite")
+    monkeypatch.setattr(renderer.time, "sleep", lambda s: None)
+    nfd = unicodedata.normalize("NFD", "/x/Bücherschrank.als")
+    res = renderer.render_set(nfd, str(out), "00007_Buecherschrank", load_timeout=5, log=lambda m: None)
+    assert res.endswith("00007_Buecherschrank.mp3")
+
+
+def test_safe_name_is_ascii(home):
+    import app as appmod
+    assert appmod._safe_name(7, "Bücherschrank (Größe) – v2") == "00007_Buecherschrank Groesse  v2"
