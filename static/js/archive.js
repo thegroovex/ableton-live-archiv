@@ -48,6 +48,7 @@ async function loadProjects() {
       <td><span class="chip" style="background:${p.color || colorFor(p.genre)}"></span></td>
       <td>${p.mp3_path ? `<button class="play" data-play="${p.id}">${A.playing === p.id ? "❚❚" : "▶"}</button>` : ""}</td>
       <td title="${esc(p.path)}">${esc(p.name)}${p.error ? ' <span title="' + esc(p.error) + '" style="color:var(--red)">●</span>' : ""}</td>
+      <td class="wcol">${p.mp3_path ? `<canvas class="mini" data-mini="${p.id}" width="320" height="44"></canvas>` : ""}</td>
       <td class="mono">${p.tempo ? (+p.tempo).toFixed(1) : "–"}</td>
       <td class="mono">${keyLabel(p.key_root, p.key_mode)} <span style="color:var(--dim)">${camelot(p.key_root, p.key_mode)}</span></td>
       <td>${esc(p.genre || "")}</td><td>${esc(p.mood || "")}</td>
@@ -56,11 +57,62 @@ async function loadProjects() {
       <td style="color:var(--accent)">${"★".repeat(p.rating || 0)}</td>
       <td class="mono">${fmtDate(p.mtime)}</td>
     </tr>`).join("");
+  loadMinis();
+}
+
+// ---- Mini-Waveforms in der Liste (wie Rekordbox: Bässe blau, Mitten orange, Höhen weiß) ----
+A.mini = A.mini || {};
+const miniQueue = [];
+let miniBusy = 0;
+function loadMinis() {
+  $$("canvas[data-mini]").forEach(c => {
+    const id = +c.dataset.mini;
+    if (A.mini[id]) drawMini(c, id);
+    else if (!miniQueue.includes(id)) miniQueue.push(id);
+  });
+  pumpMinis();
+}
+function pumpMinis() {
+  while (miniBusy < 2 && miniQueue.length) {
+    const id = miniQueue.shift();
+    miniBusy++;
+    fetch(`/api/peaks/${id}`).then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { A.mini[id] = d; const c = $(`canvas[data-mini="${id}"]`); if (c) drawMini(c, id); }
+    }).catch(() => {}).finally(() => { miniBusy--; pumpMinis(); });
+  }
+}
+function drawMini(c, id) {
+  const d = A.mini[id]; if (!d || !d.amp.length) return;
+  const g = c.getContext("2d"), W = c.width, H = c.height, n = d.amp.length, bw = W / n, mid = H / 2;
+  g.clearRect(0, 0, W, H);
+  const prog = A.playing === id && A.audio.duration ? A.audio.currentTime / A.audio.duration : -1;
+  for (let i = 0; i < n; i++) {
+    const lo = d.low[i], mi = d.mid[i], hi = d.high[i];
+    // Farbe mischen: Bass = Blau, Mitten = Orange, Höhen = Weiß
+    let r = 30 * lo + 255 * mi + 255 * hi, gg = 110 * lo + 150 * mi + 255 * hi, b = 255 * lo + 40 * mi + 255 * hi;
+    const played = prog >= 0 && i / n <= prog;
+    const a = played ? 0.45 : 1;
+    g.fillStyle = `rgba(${r | 0},${gg | 0},${b | 0},${a})`;
+    const h = Math.max(1, d.amp[i] * (H - 2));
+    g.fillRect(i * bw, mid - h / 2, Math.max(1, bw - 0.4), h);
+  }
+  if (prog >= 0) { g.fillStyle = "#fff"; g.fillRect(prog * W, 0, 2, H); }
+}
+function drawPlayingMini() {
+  if (!A.playing) return;
+  const c = $(`canvas[data-mini="${A.playing}"]`); if (c) drawMini(c, A.playing);
 }
 
 $("#plist tbody").addEventListener("click", e => {
   const play = e.target.closest("[data-play]");
   if (play) { togglePlay(+play.dataset.play); e.stopPropagation(); return; }
+  const mini = e.target.closest("canvas[data-mini]");
+  if (mini) {
+    const id = +mini.dataset.mini, r = mini.getBoundingClientRect(), f = (e.clientX - r.left) / r.width;
+    const seek = () => { if (A.audio.duration) A.audio.currentTime = f * A.audio.duration; };
+    if (A.playing !== id) { togglePlay(id); A.audio.addEventListener("loadedmetadata", seek, { once: true }); } else seek();
+    e.stopPropagation(); return;
+  }
   const tr = e.target.closest("tr"); if (tr) select(+tr.dataset.id);
 });
 $("#plist tbody").addEventListener("dblclick", e => { const tr = e.target.closest("tr"); if (tr) api(`/api/open/${tr.dataset.id}`, { method: "POST" }); });
@@ -72,7 +124,7 @@ function togglePlay(id) {
   loadProjects();
 }
 A.audio.onended = () => { A.playing = null; loadProjects(); };
-A.audio.ontimeupdate = () => drawDetailWave();
+A.audio.ontimeupdate = () => { drawDetailWave(); drawPlayingMini(); };
 
 async function select(id) {
   A.sel = id;
