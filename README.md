@@ -29,6 +29,9 @@ Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/rel
 - Mixer: Trim, 3-Band-EQ mit Kill, Color-Filter, Kanalfader, Crossfader, Kopfhörer-Cue und Cue/Master-Mix, VU-Meter.
 - Bibliothek aus deinen gerenderten MP3s plus importierter Musik (Ordner-Import oder Drag & Drop; BPM/Tonart werden analysiert). Harmonisch passende Tracks werden grün markiert. Farbige Mini-Wellenformen in der Liste.
 - **Playlists (Crates) wie in Serato DJ Pro:** Crate-Spalte links (Alle Tracks, Live-Renderings, Importiert, eigene Playlists), Trackliste rechts mit Suche (⌘F / Strg+F). Tracks per Drag & Drop oder ＋ hinzufügen (Mehrfachauswahl mit ⌘/Strg und Shift), in der Playlist per Ziehen sortieren, mit Entf entfernen. Playlists umbenennen (Doppelklick), sortieren und löschen.
+- **Import mit Ordner-Browser:** Ordner durchklicken (Benutzerordner, Musik, Downloads, externe Laufwerke bzw. Windows-Laufwerke) oder Pfad eintippen, Unterordner werden mit eingelesen.
+- **Analysieren im DJ-Tab:** markierte Tracks, alle noch nicht analysierten oder die ganze Bibliothek (BPM, Tonart, Genre, Stimmung, Wellenform).
+- **Tag-Editor** (✎ bzw. ⌘I / Strg+I): Titel, Artist, BPM, Tonart, Genre, Stimmung, Tags, Bewertung, Notizen – auch für mehrere Tracks auf einmal. Deine Werte überschreibt keine spätere Analyse; optional werden Titel, Artist, Genre, BPM und Tonart in die Audiodatei geschrieben (ID3/Vorbis/MP4). Die Suche findet auch Tags und Notizen.
 - Beatgrid: automatische Erkennung von Takt 1 (Knopf **AUTO**), Feinjustage in ms, Grid bleibt beim BPM-Ändern taktstabil.
 - Scroll-Wellenform: ziehen zum Verschieben (Shift = fein), Mausrad/＋/－ zum Zoomen (1–32 s), Doppelklick setzt den Cue.
 - **DDJ-FLX4** per Web MIDI: Play, Cue, Jogs, Tempo, EQ, Filter, Fader, Crossfader, Pads (Hot Cue, Beat Loop, Beat Jump), Load, Browse, LEDs und VU-Meter. Über den FLX4 als 4-Kanal-Audiogerät läuft der Master auf 1/2 und der Kopfhörer auf 3/4.
