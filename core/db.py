@@ -28,6 +28,9 @@ COLUMNS = {
     "locked": "TEXT", "error": "TEXT", "cues": "TEXT", "grid_offset": "REAL", "missing": "INTEGER DEFAULT 0", "created_here": "INTEGER DEFAULT 0",
 }
 
+IMPORT_EXTRA = {"mood": "TEXT", "tags": "TEXT", "notes": "TEXT", "rating": "INTEGER", "locked": "TEXT"}
+IMPORT_EDITABLE = {"title", "artist", "bpm", "key_root", "key_mode", "genre", "mood", "tags", "notes", "rating"}
+
 EDITABLE = {"name", "tempo", "key_root", "key_mode", "status", "genre", "mood", "tags", "notes", "rating", "color"}
 
 _lock = threading.Lock()
@@ -52,6 +55,10 @@ def connect() -> sqlite3.Connection:
         id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT UNIQUE, title TEXT, artist TEXT, bpm REAL,
         key_root TEXT, key_mode TEXT, duration REAL, grid_offset REAL, energy REAL, genre TEXT,
         cues TEXT, added REAL, analyzed_at REAL)""")
+    have = {r[1] for r in con.execute("PRAGMA table_info(imports)")}
+    for k, v in IMPORT_EXTRA.items():  # Tag-Editor-Felder (spätere Erweiterung)
+        if k not in have:
+            con.execute(f"ALTER TABLE imports ADD COLUMN {k} {v}")
     con.execute("CREATE TABLE IF NOT EXISTS hidden (path TEXT UNIQUE)")
     # DJ-Playlists (Crates wie in Serato); Tracks über ihre uid ("p12" = Live-Projekt, "i3" = Import)
     con.execute("CREATE TABLE IF NOT EXISTS playlists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, pos INTEGER, created REAL)")
@@ -210,12 +217,16 @@ def dj_library() -> list[dict]:
                         bpm=d.get("tempo"), key_root=d.get("key_root"), key_mode=d.get("key_mode"),
                         genre=d.get("genre"), mood=d.get("mood"), status=d.get("status"),
                         duration=d.get("length_sec"), grid_offset=d.get("grid_offset"),
+                        tags=d.get("tags") or [], notes=d.get("notes") or "", rating=d.get("rating") or 0,
+                        analyzed=bool(d.get("analyzed_at")), path=d.get("mp3_path"),
                         url=f"/audio/{d['id']}", source="Live"))
     for r in con.execute("SELECT * FROM imports ORDER BY added DESC"):
         d = dict(r)
         out.append(dict(uid=f"i{d['id']}", kind="i", id=d["id"], title=d["title"], artist=d.get("artist") or "",
                         bpm=d.get("bpm"), key_root=d.get("key_root"), key_mode=d.get("key_mode"),
-                        genre=d.get("genre"), mood=None, status=None, duration=d.get("duration"),
+                        genre=d.get("genre"), mood=d.get("mood"), status=None, duration=d.get("duration"),
+                        tags=_json_list(d.get("tags")), notes=d.get("notes") or "", rating=d.get("rating") or 0,
+                        analyzed=bool(d.get("analyzed_at")), path=d.get("path"),
                         grid_offset=d.get("grid_offset"), url=f"/audio/import/{d['id']}", source="Import"))
     return out
 
@@ -232,9 +243,28 @@ def add_import(values: dict) -> int:
         return cur.lastrowid
 
 
-def update_import(iid: int, values: dict) -> None:
+def _json_list(v) -> list:
+    try:
+        x = json.loads(v) if v else []
+        return x if isinstance(x, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
+def update_import(iid: int, values: dict, lock_fields: bool = False) -> None:
+    """Wie update(): vom Nutzer im Tag-Editor gesetzte Felder überschreibt keine spätere Analyse."""
     with _lock:
         con = db()
+        row = con.execute("SELECT locked FROM imports WHERE id=?", (iid,)).fetchone()
+        if not row:
+            return
+        locked = set(_json_list(row["locked"]))
+        if lock_fields:
+            locked |= set(values) & IMPORT_EDITABLE
+        else:
+            values = {k: v for k, v in values.items() if k not in locked}
+        values = {k: (json.dumps(v) if isinstance(v, (list, dict)) else v) for k, v in values.items()}
+        values["locked"] = json.dumps(sorted(locked))
         sets = ", ".join(f"{k}=?" for k in values)
         con.execute(f"UPDATE imports SET {sets} WHERE id=?", (*values.values(), iid))
         con.commit()
