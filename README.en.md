@@ -6,6 +6,14 @@ Keeps your Ableton Live 12 projects in order – plus a DJ mode for the Pioneer 
 
 **Runs on macOS (primary platform) and Windows 10/11.** The interface is available in German and English.
 
+## Download
+| System | Download | Start |
+|---|---|---|
+| 🍎 macOS | [Live-Archiv-macOS.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-macOS.zip) | unzip, double-click `start.command` (first time: right-click → Open, because macOS blocks downloaded scripts) |
+| 🪟 Windows | [Live-Archiv-Windows.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-Windows.zip) | unzip, double-click `start.bat` (if SmartScreen appears: “More info” → “Run anyway”) |
+
+All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/releases). GitHub Actions builds the ZIPs automatically for every version tag (`v1.2.3`). Python 3.10+ is required (see Installation).
+
 ## Features
 **Archive**
 - Scans your project folders for `.als` sets (backups are ignored) and reads tempo, key (Live 12 scale), tracks, clips, length, automation, plug-ins and missing samples – without opening Live.
@@ -30,12 +38,12 @@ Keeps your Ableton Live 12 projects in order – plus a DJ mode for the Pioneer 
 
 ### macOS
 1. Python 3.10+ (preinstalled or `brew install python`). Optional: `brew install ffmpeg`.
-2. Unzip/clone the folder and double-click `start.command` (packages are installed on first start).
+2. Download and unzip the ZIP (or clone) and double-click `start.command` (packages are installed on first start).
 3. The app opens in Chrome at http://127.0.0.1:5077 (use Chrome or Edge for the FLX4; Safari has no MIDI).
 
 ### Windows 10/11
 1. Install Python 3.10+ from python.org (tick “Add python.exe to PATH”). Optional: `winget install ffmpeg`.
-2. Unzip/clone the folder and double-click `start.bat` (packages are installed on first start).
+2. Download and unzip the ZIP (or clone) and double-click `start.bat` (packages are installed on first start).
 3. The app opens in Chrome or Edge at http://127.0.0.1:5077.
 4. For the FLX4, install Pioneer's audio driver; Chrome/Edge then see it as a 4-channel output.
 
