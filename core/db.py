@@ -50,6 +50,7 @@ def connect() -> sqlite3.Connection:
         id INTEGER PRIMARY KEY AUTOINCREMENT, path TEXT UNIQUE, title TEXT, artist TEXT, bpm REAL,
         key_root TEXT, key_mode TEXT, duration REAL, grid_offset REAL, energy REAL, genre TEXT,
         cues TEXT, added REAL, analyzed_at REAL)""")
+    con.execute("CREATE TABLE IF NOT EXISTS hidden (path TEXT UNIQUE)")
     con.commit()
     return con
 
@@ -239,3 +240,31 @@ def set_cues(kind: str, iid: int, cues: list) -> None:
     with _lock:
         db().execute(f"UPDATE {table} SET cues=? WHERE id=?", (json.dumps(cues), iid))
         db().commit()
+
+
+def remove_project(pid: int) -> bool:
+    """Nimmt ein Projekt aus der Liste und merkt es sich, damit ein neuer Scan es nicht zurückholt.
+    Die .als-Datei bleibt unangetastet; nur eine von Live Archiv gerenderte MP3 wird gelöscht."""
+    with _lock:
+        con = db()
+        row = con.execute("SELECT path, mp3_path FROM projects WHERE id=?", (pid,)).fetchone()
+        if not row:
+            return False
+        mp3 = row["mp3_path"]
+        if mp3 and os.path.abspath(mp3).startswith(os.path.abspath(RENDER_DIR)) and os.path.exists(mp3):
+            os.remove(mp3)
+        con.execute("INSERT OR IGNORE INTO hidden (path) VALUES (?)", (row["path"],))
+        con.execute("DELETE FROM projects WHERE id=?", (pid,))
+        con.commit()
+        return True
+
+
+def hidden_paths() -> set:
+    return {r["path"] for r in db().execute("SELECT path FROM hidden")}
+
+
+def unhide_all() -> int:
+    with _lock:
+        n = db().execute("DELETE FROM hidden").rowcount
+        db().commit()
+        return n
