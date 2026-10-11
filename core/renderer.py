@@ -38,6 +38,37 @@ def _front_window_title() -> str:
         return ""
 
 
+def _window_titles() -> list[str]:
+    """Namen aller Live-Fenster. Bei Sets mit Video liegt das Videofenster vorne, nicht das Set."""
+    try:
+        out = _osa(f'tell application "System Events" to tell process "{LIVE_PROCESS}" to get name of every window', timeout=10)
+    except Exception:
+        return []
+    return [t.strip() for t in out.split(", ") if t.strip() and t.strip() != "missing value"]
+
+
+def _raise_set_window(set_name: str) -> None:
+    """Holt das Hauptfenster des Sets nach vorne (z. B. vor ein Videofenster)."""
+    esc = set_name.replace('"', '\\"')
+    script = f'''
+    tell application "System Events" to tell process "{LIVE_PROCESS}"
+        set frontmost to true
+        repeat with w in windows
+            try
+                if (name of w as text) starts with "{esc}" then
+                    perform action "AXRaise" of w
+                    return "ok"
+                end if
+            end try
+        end repeat
+    end tell
+    return "none"'''
+    try:
+        _osa(script, timeout=10)
+    except Exception:
+        pass
+
+
 def _front_document() -> str:
     """Datei-URL des vorderen Live-Fensters (AXDocument), falls macOS sie liefert."""
     try:
@@ -179,7 +210,7 @@ def open_in_live(als_path: str, app_name: str, attempt: int = 0) -> None:
 
 
 def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Ableton Live 12 Suite",
-               load_timeout: int = 180, render_timeout: int = 900, log=print) -> str:
+               load_timeout: int = 180, render_timeout: int = 900, start_timeout: int = 150, log=print) -> str:
     """Öffnet das Set in Live, exportiert es und gibt den Pfad zur MP3 zurück."""
     os.makedirs(out_dir, exist_ok=True)
     set_name = os.path.splitext(os.path.basename(als_path))[0]
@@ -203,6 +234,11 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
     while time.time() - t0 < load_timeout:
         _dismiss_save_dialog()
         title = _front_window_title()
+        titles = _window_titles()
+        if title and title not in titles:
+            titles.append(title)
+        if any(_title_is(set_name, t) for t in titles):
+            title = next(t for t in titles if _title_is(set_name, t))
         waited = time.time() - t0
         doc = _front_document()
         if _doc_is(als_path, doc):
@@ -227,6 +263,8 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
         raise TimeoutError(f"Set wurde nicht geladen, Live zeigt „{title}“. Übersprungen.")
     time.sleep(4)  # Plug-ins/Samples fertig laden lassen
 
+    _raise_set_window(set_name)
+    time.sleep(0.5)
     log("Export-Dialog …")
     esc_dir = out_dir.replace('"', '\\"')
     esc_name = out_name.replace('"', '\\"')
@@ -263,6 +301,8 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
     last_size, stable = -1, 0
     target = None
     while time.time() - t0 < render_timeout:
+        if target is None and time.time() - t0 > start_timeout:
+            raise TimeoutError("Export ist nicht gestartet (evtl. Video im Set oder ein Live-Dialog). Übersprungen.")
         mp3s = glob.glob(os.path.join(out_dir, out_name + "*.mp3"))
         wavs = glob.glob(os.path.join(out_dir, out_name + "*.wav")) + glob.glob(os.path.join(out_dir, out_name + "*.aif*"))
         cand = mp3s or wavs
