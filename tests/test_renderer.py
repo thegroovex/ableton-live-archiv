@@ -28,7 +28,9 @@ def test_render_flow_with_mocked_live(tmp_path, monkeypatch):
     monkeypatch.setattr(renderer.time, "sleep", lambda s: None)
     res = renderer.render_set("/x/Song Project/Song.als", str(out), "00001_Song", app_name="Ableton Live 12 Suite", log=lambda m: None)
     assert res == str(out / "00001_Song.mp3") and os.path.getsize(res) > 2000
-    assert calls[0] == ["open", "-a", "Ableton Live 12 Suite", "/x/Song Project/Song.als"]
+    assert ["open", "-a", "Ableton Live 12 Suite", "/x/Song Project/Song.als"] in calls
+    # Live wird vor dem Öffnen frisch gestartet (kein "Save changes?"-Dialog)
+    assert calls.index(["pkill", "-9", "-x", "Live"]) < calls.index(["open", "-a", "Ableton Live 12 Suite", "/x/Song Project/Song.als"])
     script = [c for c in calls if c[0] == "osascript" and "keystroke \"r\"" in c[2]][0][2]
     assert "command down, shift down" in script and str(out) in script and "00001_Song" in script
 
