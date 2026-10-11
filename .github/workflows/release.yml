@@ -1,0 +1,42 @@
+name: ZIP-Downloads (macOS + Windows)
+# Baut bei jedem Versions-Tag (v1.2.3) zwei fertige ZIPs und hängt sie an das GitHub-Release.
+# Auch manuell startbar (Actions → "ZIP-Downloads" → Run workflow); dann wird das Release "latest" aktualisiert.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ZIPs bauen
+        run: |
+          set -e
+          COMMON="app.py core static requirements.txt README.md README.en.md"
+          mkdir -p dist/mac/Live-Archiv dist/win/Live-Archiv
+          cp -r $COMMON dist/mac/Live-Archiv/
+          cp -r $COMMON dist/win/Live-Archiv/
+          cp start.command dist/mac/Live-Archiv/ && chmod +x dist/mac/Live-Archiv/start.command
+          cp start.bat dist/win/Live-Archiv/
+          find dist -name "__pycache__" -type d -prune -exec rm -rf {} +
+          (cd dist/mac && zip -qr -X ../Live-Archiv-macOS.zip Live-Archiv)
+          (cd dist/win && zip -qr -X ../Live-Archiv-Windows.zip Live-Archiv)
+          ls -l dist/*.zip
+      - name: Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+          name: ${{ github.ref_type == 'tag' && format('Live Archiv {0}', github.ref_name) || 'Live Archiv (aktueller Stand)' }}
+          make_latest: true
+          files: |
+            dist/Live-Archiv-macOS.zip
+            dist/Live-Archiv-Windows.zip
+          body: |
+            **Download**
+            - 🍎 macOS: `Live-Archiv-macOS.zip` → entpacken → `start.command` (beim ersten Mal Rechtsklick → Öffnen)
+            - 🪟 Windows: `Live-Archiv-Windows.zip` → entpacken → `start.bat`
+
+            Voraussetzung: Python 3.10+. Details im README (Deutsch) bzw. README.en.md (English).
