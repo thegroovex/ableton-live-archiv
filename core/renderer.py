@@ -38,35 +38,60 @@ def _front_window_title() -> str:
         return ""
 
 
-def _dismiss_save_dialog() -> str:
-    """Beantwortet Lives Frage "Änderungen sichern?" mit 'Nicht sichern'.
+def _front_document() -> str:
+    """Datei-URL des vorderen Live-Fensters (AXDocument), falls macOS sie liefert."""
+    try:
+        return _osa(f'tell application "System Events" to tell process "{LIVE_PROCESS}" to get value of attribute "AXDocument" of front window', timeout=10)
+    except Exception:
+        return ""
 
-    Live schreibt "Don’t Save" mit typografischem Apostroph, deshalb wird nur auf Wortanfänge geprüft.
-    Findet sich kein bedienbarer Knopf, aber ein Dialogfenster, wird Cmd+D gesendet
-    (macOS-Kürzel für "Nicht sichern"), nur dann, wenn wirklich ein Dialog vorne ist.
+
+def _title_is(set_name: str, title: str) -> bool:
+    """Exakter Vergleich: Live zeigt nur den Set-Namen (evtl. mit * oder ' - Ableton Live …')."""
+    t = _n(title).strip()
+    t = t.split(" - ableton")[0].strip().rstrip("*").strip()
+    return t == _n(set_name)
+
+
+def _doc_is(als_path: str, doc: str) -> bool:
+    from urllib.parse import unquote
+    return bool(doc) and _n(unquote(doc)).rstrip("/").endswith(_n(als_path))
+
+
+def _dismiss_save_dialog() -> str:
+    """Beantwortet Lives Frage "Änderungen sichern?" mit 'Don’t Save'.
+
+    Live zeichnet seine Dialoge selbst, die Knöpfe sind für macOS oft unsichtbar. Darum zuerst
+    echte Knöpfe suchen, sonst das kleine Dialogfenster ohne Titel finden und auf die Stelle klicken,
+    an der Live 'Don’t Save' immer zeichnet (links unten). Sicher, weil Live Archiv nur rendert,
+    wenn Live vorher geschlossen war: jede Frage betrifft also ein Set, das das Tool selbst geöffnet hat.
     """
     script = f'''
     tell application "System Events" to tell process "{LIVE_PROCESS}"
         repeat with w in windows
-            set sr to ""
-            try
-                set sr to subrole of w
-            end try
             repeat with b in (buttons of w)
                 set n to ""
                 try
                     set n to (name of b) as text
                 end try
-                if (n starts with "Don" and n contains "Save") or n contains "Nicht sichern" or n contains "Nicht speichern" or n is "Nein" or n is "No" then
+                if (n starts with "Don" and n contains "Save") or n contains "Nicht sichern" or n contains "Nicht speichern" then
                     click b
                     return "clicked"
                 end if
             end repeat
-            if sr is in {{"AXDialog", "AXSystemDialog"}} then
+        end repeat
+        repeat with w in windows
+            set t to ""
+            try
+                set t to (name of w) as text
+            end try
+            set {{wx, wy}} to position of w
+            set {{ww, wh}} to size of w
+            if t is "" and ww > 400 and ww < 950 and wh > 120 and wh < 330 then
                 set frontmost to true
                 delay 0.2
-                keystroke "d" using {{command down}}
-                return "key"
+                click at {{(wx + ww * 0.15) as integer, (wy + wh * 0.8) as integer}}
+                return "clicked"
             end if
         end repeat
     end tell
@@ -75,6 +100,11 @@ def _dismiss_save_dialog() -> str:
         return _osa(script, timeout=10)
     except Exception:
         return "error"
+
+
+def live_is_running() -> bool:
+    res = subprocess.run(["pgrep", "-x", LIVE_PROCESS], capture_output=True)
+    return res.returncode == 0
 
 
 def open_in_live(als_path: str, app_name: str, attempt: int = 0) -> None:
@@ -95,8 +125,12 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
 
     if not os.path.isfile(als_path):
         raise FileNotFoundError(f"Datei nicht gefunden: {als_path}. Übersprungen, bitte neu scannen.")
+    # Heißt das Set wie das, was Live schon zeigt (z. B. "Untitled"), reicht der Fenstertitel nicht:
+    # dann zählt die Datei hinter dem Fenster, oder mindestens ein Titelwechsel bzw. 15 s Ladezeit.
+    ambiguous = _title_is(set_name, _front_window_title())
     log(f"Öffne {set_name} in Live …")
     open_in_live(als_path, app_name)
+    title_changed = False
     t0 = time.time()
     next_note = 20
     reopen_at, attempt = 25, 0
@@ -104,9 +138,15 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
     while time.time() - t0 < load_timeout:
         _dismiss_save_dialog()
         title = _front_window_title()
-        if _n(set_name) in _n(title):
-            break
         waited = time.time() - t0
+        doc = _front_document()
+        if _doc_is(als_path, doc):
+            break
+        if _title_is(set_name, title):
+            if not ambiguous or title_changed or (not doc and waited >= 15):
+                break
+        elif title:
+            title_changed = True
         if waited >= reopen_at:  # Live hat die Datei nicht übernommen: erneut schicken
             attempt += 1
             try:
@@ -183,7 +223,7 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
         os.remove(extra)
     for _ in range(3):  # Live fragt nach dem Export oft nach dem Sichern
         time.sleep(1)
-        if _dismiss_save_dialog() in ("clicked", "key"):
+        if _dismiss_save_dialog() == "clicked":
             break
     log("Fertig gerendert.")
     return final
