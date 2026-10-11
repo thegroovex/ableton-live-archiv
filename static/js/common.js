@@ -116,3 +116,11 @@ function toast(msg) {
   t.textContent = msg; t.classList.add("show");
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 4000);
 }
+
+// Sprachumschalter oben rechts (DE/EN)
+(() => {
+  const b = document.getElementById("btn-lang"); if (!b) return;
+  b.textContent = I18N.lang === "de" ? "EN" : "DE";
+  b.setAttribute("data-noi18n", "");
+  b.onclick = () => { const l = I18N.lang === "de" ? "en" : "de"; api("/api/settings", { method: "POST", body: { lang: l } }).catch(() => {}); setLang(l); };
+})();
