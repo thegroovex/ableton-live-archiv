@@ -84,6 +84,10 @@ def index_set(path: str) -> int:
 
 
 def job_scan(roots):
+    from core.als_parser import clean_path
+    for r in roots:
+        if not os.path.isdir(clean_path(r)):
+            JOB.write(f"Ordner nicht gefunden: {clean_path(r)}")
     paths = find_sets(roots)
     JOB.total = len(paths)
     JOB.write(f"{len(paths)} Live-Sets gefunden.")
