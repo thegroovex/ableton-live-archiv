@@ -52,6 +52,10 @@ def connect() -> sqlite3.Connection:
         key_root TEXT, key_mode TEXT, duration REAL, grid_offset REAL, energy REAL, genre TEXT,
         cues TEXT, added REAL, analyzed_at REAL)""")
     con.execute("CREATE TABLE IF NOT EXISTS hidden (path TEXT UNIQUE)")
+    # DJ-Playlists (Crates wie in Serato); Tracks über ihre uid ("p12" = Live-Projekt, "i3" = Import)
+    con.execute("CREATE TABLE IF NOT EXISTS playlists (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, pos INTEGER, created REAL)")
+    con.execute("""CREATE TABLE IF NOT EXISTS playlist_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, playlist_id INTEGER, uid TEXT, pos INTEGER)""")
     con.commit()
     return con
 
@@ -269,3 +273,74 @@ def unhide_all() -> int:
         n = db().execute("DELETE FROM hidden").rowcount
         db().commit()
         return n
+
+
+# ---------------------------------------------------------------- DJ-Playlists
+def _valid_uid(u) -> bool:
+    return isinstance(u, str) and len(u) > 1 and u[0] in "pi" and u[1:].isdigit()
+
+
+def playlists() -> list[dict]:
+    con = db()
+    out = []
+    for r in con.execute("SELECT * FROM playlists ORDER BY pos, id"):
+        items = [x["uid"] for x in con.execute("SELECT uid FROM playlist_items WHERE playlist_id=? ORDER BY pos, id", (r["id"],))]
+        out.append(dict(id=r["id"], name=r["name"], items=items, count=len(items)))
+    return out
+
+
+def playlist_create(name: str) -> int:
+    import time
+    with _lock:
+        con = db()
+        pos = (con.execute("SELECT COALESCE(MAX(pos), -1) FROM playlists").fetchone()[0]) + 1
+        cur = con.execute("INSERT INTO playlists (name, pos, created) VALUES (?,?,?)", (name.strip() or "Neue Playlist", pos, time.time()))
+        con.commit()
+        return cur.lastrowid
+
+
+def playlist_rename(pid: int, name: str) -> None:
+    with _lock:
+        db().execute("UPDATE playlists SET name=? WHERE id=?", (name.strip() or "Playlist", pid)); db().commit()
+
+
+def playlist_delete(pid: int) -> None:
+    with _lock:
+        con = db()
+        con.execute("DELETE FROM playlist_items WHERE playlist_id=?", (pid,))
+        con.execute("DELETE FROM playlists WHERE id=?", (pid,))
+        con.commit()
+
+
+def playlist_exists(pid: int) -> bool:
+    return db().execute("SELECT 1 FROM playlists WHERE id=?", (pid,)).fetchone() is not None
+
+
+def playlist_set(pid: int, uids: list) -> list[str]:
+    """Reihenfolge komplett setzen (Sortieren/Entfernen). Doppelte Einträge werden entfernt."""
+    seen, clean = set(), []
+    for u in uids:
+        if _valid_uid(u) and u not in seen:
+            seen.add(u); clean.append(u)
+    with _lock:
+        con = db()
+        con.execute("DELETE FROM playlist_items WHERE playlist_id=?", (pid,))
+        con.executemany("INSERT INTO playlist_items (playlist_id, uid, pos) VALUES (?,?,?)", [(pid, u, i) for i, u in enumerate(clean)])
+        con.commit()
+    return clean
+
+
+def playlist_add(pid: int, uids: list, index: int | None = None) -> list[str]:
+    """Tracks anhängen (oder an index einfügen); schon enthaltene Tracks werden nicht doppelt aufgenommen."""
+    cur = next((p["items"] for p in playlists() if p["id"] == pid), [])
+    new = [u for u in uids if _valid_uid(u) and u not in cur]
+    if index is None or index < 0 or index > len(cur):
+        index = len(cur)
+    return playlist_set(pid, cur[:index] + new + cur[index:])
+
+
+def playlist_reorder(ids: list) -> None:
+    with _lock:
+        con = db()
+        con.executemany("UPDATE playlists SET pos=? WHERE id=?", [(i, int(x)) for i, x in enumerate(ids)])
+        con.commit()
