@@ -36,8 +36,12 @@ _lock = threading.Lock()
 def connect() -> sqlite3.Connection:
     os.makedirs(HOME, exist_ok=True)
     os.makedirs(RENDER_DIR, exist_ok=True)
-    con = sqlite3.connect(DB_PATH, check_same_thread=False)
+    con = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=15)
     con.row_factory = sqlite3.Row
+    try:
+        con.execute("PRAGMA journal_mode=WAL")  # Lesen und Schreiben gleichzeitig
+    except sqlite3.DatabaseError:
+        pass
     cols = ", ".join(f"{k} {v}" for k, v in COLUMNS.items())
     con.execute(f"CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY AUTOINCREMENT, {cols})")
     existing = {r[1] for r in con.execute("PRAGMA table_info(projects)")}
@@ -57,14 +61,27 @@ def connect() -> sqlite3.Connection:
     return con
 
 
-CON = None
+_local = threading.local()
+_schema_ready = False
+_schema_lock = threading.Lock()
 
 
 def db() -> sqlite3.Connection:
-    global CON
-    if CON is None:
-        CON = connect()
-    return CON
+    """Eine SQLite-Verbindung pro Thread. Flask bedient Anfragen parallel (z. B. viele Mini-Waveforms
+    gleichzeitig); eine gemeinsame Verbindung führt dann zu 'bad parameter or other API misuse'."""
+    global _schema_ready
+    con = getattr(_local, "con", None)
+    if con is not None and getattr(_local, "path", None) == DB_PATH:
+        return con
+    with _schema_lock:
+        if not _schema_ready:
+            connect().close()  # Tabellen/Spalten einmalig anlegen
+            _schema_ready = True
+    con = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=15)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA busy_timeout=15000")
+    _local.con, _local.path = con, DB_PATH
+    return con
 
 
 def row_to_dict(r: sqlite3.Row) -> dict:
