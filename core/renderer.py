@@ -77,8 +77,12 @@ def _dismiss_save_dialog() -> str:
         return "error"
 
 
-def open_in_live(als_path: str, app_name: str) -> None:
-    subprocess.run(["open", "-a", app_name, als_path], check=True)
+def open_in_live(als_path: str, app_name: str, attempt: int = 0) -> None:
+    if attempt % 2 == 0:
+        subprocess.run(["open", "-a", app_name, als_path], check=True)
+    else:  # zweiter Weg, falls Live das erste Öffnen verschluckt hat
+        esc = als_path.replace("\\", "\\\\").replace('"', '\\"')
+        _osa(f'tell application "{app_name}" to open (POSIX file "{esc}")', timeout=30)
 
 
 def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Ableton Live 12 Suite",
@@ -89,10 +93,13 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
     for old in glob.glob(os.path.join(out_dir, out_name + ".*")):
         os.remove(old)
 
+    if not os.path.isfile(als_path):
+        raise FileNotFoundError(f"Datei nicht gefunden: {als_path}. Übersprungen, bitte neu scannen.")
     log(f"Öffne {set_name} in Live …")
     open_in_live(als_path, app_name)
     t0 = time.time()
     next_note = 20
+    reopen_at, attempt = 25, 0
     title = ""
     while time.time() - t0 < load_timeout:
         _dismiss_save_dialog()
@@ -100,8 +107,15 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
         if _n(set_name) in _n(title):
             break
         waited = time.time() - t0
+        if waited >= reopen_at:  # Live hat die Datei nicht übernommen: erneut schicken
+            attempt += 1
+            try:
+                open_in_live(als_path, app_name, attempt)
+            except Exception:
+                pass
+            reopen_at += 30
         if waited >= next_note:
-            log(f"Warte auf Live ({int(waited)} s) … Vorne ist gerade: „{title or 'kein Fenster'}“")
+            log(f"Warte auf {set_name} ({int(waited)} s) … Live zeigt gerade „{title or 'kein Fenster'}“")
             next_note += 20
         time.sleep(1.5)
     else:
