@@ -92,3 +92,46 @@ test("Ohne Master Tempo steigt die Tonhöhe mit dem Tempo", () => {
   let z = 0; for (let i = 1; i < got.length; i++) if (got[i - 1] < 0 && got[i] >= 0) z++;
   assert.ok(Math.abs(z / (got.length / sr) - 475) < 10);
 });
+
+function freqOf(p, sr, blocks = 600, skip = 300) {
+  const out = [[new Float32Array(128), new Float32Array(128)]], got = [];
+  for (let b = 0; b < blocks; b++) { p.process([], out); if (b > skip) got.push(...out[0][0]); }
+  let z = 0; for (let i = 1; i < got.length; i++) if (got[i - 1] < 0 && got[i] >= 0) z++;
+  return z / (got.length / sr);
+}
+const sine = (sr, f, sec = 3) => { const L = new Float32Array(sr * sec); for (let i = 0; i < L.length; i++) L[i] = Math.sin(2 * Math.PI * f * i / sr); return L; };
+
+test("Transposition +2 Halbtöne ohne Tempoänderung", () => {
+  const P = loadProcessor(), p = new P(), sr = 48000;
+  p.onMsg({ type: "load", L: sine(sr, 440), sampleRate: sr }); p.onMsg({ type: "semis", value: 2 }); p.onMsg({ type: "play", value: true });
+  const f = freqOf(p, sr);
+  assert.ok(Math.abs(f - 440 * Math.pow(2, 2 / 12)) < 12, `Frequenz ${f.toFixed(1)} Hz statt ~494`);
+});
+
+test("Keep Pitch + Transposition −1 Halbton bei +8 % Tempo", () => {
+  const P = loadProcessor(), p = new P(), sr = 48000;
+  p.onMsg({ type: "load", L: sine(sr, 440), sampleRate: sr }); p.onMsg({ type: "rate", value: 1.08 });
+  p.onMsg({ type: "keylock", value: true }); p.onMsg({ type: "semis", value: -1 }); p.onMsg({ type: "play", value: true });
+  const f = freqOf(p, sr);
+  assert.ok(Math.abs(f - 440 * Math.pow(2, -1 / 12)) < 12, `Frequenz ${f.toFixed(1)} Hz statt ~415`);
+});
+
+test("Repitch + Key Sync: Tempo +5,9 % und −1 Halbton ergibt Originaltonhöhe", () => {
+  const P = loadProcessor(), p = new P(), sr = 48000;
+  p.onMsg({ type: "load", L: sine(sr, 440), sampleRate: sr }); p.onMsg({ type: "rate", value: Math.pow(2, 1 / 12) });
+  p.onMsg({ type: "semis", value: -1 }); p.onMsg({ type: "play", value: true });
+  const f = freqOf(p, sr);
+  assert.ok(Math.abs(f - 440) < 12, `Frequenz ${f.toFixed(1)} Hz statt ~440`);
+});
+
+test("Pitch-Shifter klingt sauber (kaum Pegelschwankung bei Sinus)", () => {
+  const P = loadProcessor(), p = new P(), sr = 48000;
+  p.onMsg({ type: "load", L: sine(sr, 220), sampleRate: sr }); p.onMsg({ type: "rate", value: 1.1 });
+  p.onMsg({ type: "keylock", value: true }); p.onMsg({ type: "play", value: true });
+  const out = [[new Float32Array(128), new Float32Array(128)]], got = [];
+  for (let b = 0; b < 700; b++) { p.process([], out); if (b > 300) got.push(...out[0][0]); }
+  // RMS in 20-ms-Fenstern: Sinus mit Amplitude 1 → 0,707; Phasensprünge würden Einbrüche erzeugen
+  const win = 960; let minR = 1, maxR = 0;
+  for (let i = 0; i + win <= got.length; i += win) { let e = 0; for (let k = 0; k < win; k++) e += got[i + k] ** 2; const r = Math.sqrt(e / win); minR = Math.min(minR, r); maxR = Math.max(maxR, r); }
+  assert.ok(minR > 0.6 && maxR < 0.8, `RMS ${minR.toFixed(3)}..${maxR.toFixed(3)}`);
+});
