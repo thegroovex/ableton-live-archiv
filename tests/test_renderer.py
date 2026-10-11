@@ -8,6 +8,13 @@ import pytest
 @pytest.fixture(autouse=True)
 def _files_exist(monkeypatch):
     monkeypatch.setattr(renderer.os.path, "isfile", lambda p: True)
+    counter = {"n": 0}
+    def windows():  # jeder Aufruf "sieht" ein Fenster mehr: Export-Dialog geht sofort auf
+        counter["n"] += 1
+        return counter["n"]
+    monkeypatch.setattr(renderer, "_window_count", windows)
+    monkeypatch.setattr(renderer, "_wait_until_idle", lambda log=print: None)
+    monkeypatch.setattr(renderer, "_find_save_dialog", lambda: None)
 
 from core import renderer
 
@@ -29,10 +36,12 @@ def test_render_flow_with_mocked_live(tmp_path, monkeypatch):
     res = renderer.render_set("/x/Song Project/Song.als", str(out), "00001_Song", app_name="Ableton Live 12 Suite", log=lambda m: None)
     assert res == str(out / "00001_Song.mp3") and os.path.getsize(res) > 2000
     assert ["open", "-a", "Ableton Live 12 Suite", "/x/Song Project/Song.als"] in calls
-    # Live wird vor dem Öffnen frisch gestartet (kein "Save changes?"-Dialog)
-    assert calls.index(["pkill", "-9", "-x", "Live"]) < calls.index(["open", "-a", "Ableton Live 12 Suite", "/x/Song Project/Song.als"])
-    script = [c for c in calls if c[0] == "osascript" and "keystroke \"r\"" in c[2]][0][2]
-    assert "command down, shift down" in script and str(out) in script and "00001_Song" in script
+    # Ohne hängenden Dialog bleibt Live offen (schneller Weg, kein Neustart)
+    assert ["pkill", "-9", "-x", "Live"] not in calls
+
+    assert any(c[0] == "osascript" and "command down, shift down" in c[2] for c in calls)
+    script = [c for c in calls if c[0] == "osascript" and "key code 36" in c[2]][0][2]
+    assert str(out) in script and "00001_Song" in script
 
 
 def test_load_timeout(tmp_path, monkeypatch):
@@ -87,3 +96,16 @@ def test_umlaut_set_name_matches_window_title(tmp_path, monkeypatch):
 def test_safe_name_is_ascii(home):
     import app as appmod
     assert appmod._safe_name(7, "Bücherschrank (Größe) – v2") == "00007_Buecherschrank Groesse  v2"
+
+
+def test_falls_back_to_restart_when_dialog_sticks(monkeypatch):
+    calls = []
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        class R: returncode = 0; stdout = ""; stderr = ""
+        return R()
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+    monkeypatch.setattr(renderer.time, "sleep", lambda s: None)
+    monkeypatch.setattr(renderer, "_find_save_dialog", lambda: (533, 440, 504, 149))
+    monkeypatch.setattr(renderer, "_dismiss_save_dialog", lambda: "still-open")
+    assert renderer._try_switch_with_dialog("/x/A.als", "Ableton Live 12 Suite", log=lambda m: None) is False
