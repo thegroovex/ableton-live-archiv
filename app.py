@@ -174,6 +174,11 @@ def _analyze(pid):
         return
     JOB.write(f"Analysiere {p['name']} …")
     a = analyze_audio(p["mp3_path"])
+    try:
+        from core import peaks
+        peaks.cached(p["mp3_path"], db.PEAKS_DIR, f"p{pid}")
+    except Exception:
+        pass
     if a.get("error"):
         JOB.write(a["error"]); return
     vals = {"energy": a["energy"], "brightness": a["brightness"], "mood": a["mood"], "analyzed_at": time.time(),
@@ -213,6 +218,20 @@ def api_projects():
 def api_project(pid):
     p = db.get(pid)
     return jsonify(p) if p else abort(404)
+
+
+@app.get("/api/peaks/<int:pid>")
+def api_peaks(pid):
+    """Mini-Waveform für die Listenansicht (wird zwischengespeichert)."""
+    from core import peaks
+    p = db.get(pid)
+    if not p or not p.get("mp3_path") or not os.path.exists(p["mp3_path"]):
+        return jsonify(error="kein Audio"), 404
+    try:
+        data = peaks.cached(p["mp3_path"], db.PEAKS_DIR, f"p{pid}")
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+    return jsonify({k: data[k] for k in ("amp", "low", "mid", "high", "duration")})
 
 
 @app.delete("/api/projects/<int:pid>")
