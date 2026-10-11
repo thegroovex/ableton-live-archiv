@@ -67,25 +67,15 @@ async function pollJob() {
 $("#btn-cancel").onclick = () => api("/api/job/cancel", { method: "POST" });
 pollJob();
 
-// Wellenform-Peaks aus einem AudioBuffer
+// Wellenform-Peaks aus einem AudioBuffer, inklusive Bässe/Mitten/Höhen für die Rekordbox-Farben
 function computePeaks(buffer, perSecond = 150) {
-  const ch0 = buffer.getChannelData(0), ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ch0;
-  const block = Math.max(1, Math.floor(buffer.sampleRate / perSecond));
-  const n = Math.floor(ch0.length / block);
-  const peaks = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let m = 0;
-    for (let j = i * block, e = j + block; j < e; j += 4) {
-      const v = Math.abs(ch0[j]) + Math.abs(ch1[j]);
-      if (v > m) m = v;
-    }
-    peaks[i] = Math.min(1, m / 2);
-  }
-  return { peaks, perSecond: buffer.sampleRate / block };
+  return Wave.fromBuffer(buffer, perSecond);
 }
 
-function drawOverview(canvas, peaks, color, progress = null, cues = []) {
-  const dpr = devicePixelRatio || 1, w = canvas.clientWidth * dpr, h = canvas.clientHeight * dpr;
+// Übersichts-Wellenform. Ohne bands einfarbig (color), mit bands farbig wie im Archiv.
+function drawOverview(canvas, peaks, color, progress = null, cues = [], bands = null) {
+  const dpr = devicePixelRatio || 1, w = Math.round(canvas.clientWidth * dpr), h = Math.round(canvas.clientHeight * dpr);
+  if (!w || !h) return;
   if (canvas.width !== w) canvas.width = w;
   if (canvas.height !== h) canvas.height = h;
   const g = canvas.getContext("2d");
@@ -94,8 +84,10 @@ function drawOverview(canvas, peaks, color, progress = null, cues = []) {
   const mid = h / 2;
   for (let x = 0; x < w; x++) {
     const i0 = Math.floor(x / w * peaks.length), i1 = Math.max(i0 + 1, Math.floor((x + 1) / w * peaks.length));
-    let m = 0; for (let i = i0; i < i1; i++) if (peaks[i] > m) m = peaks[i];
-    g.fillStyle = progress != null && x / w < progress ? "#666" : color;
+    let m = 0, mi = i0; for (let i = i0; i < i1; i++) if (peaks[i] > m) { m = peaks[i]; mi = i; }
+    const played = progress != null && x / w < progress;
+    if (bands && bands.low) g.fillStyle = Wave.bandColor(bands.low[mi], bands.mid[mi], bands.high[mi], played ? 0.45 : 1);
+    else g.fillStyle = played ? "#666" : color;
     g.fillRect(x, mid - m * mid, 1, Math.max(1, m * h));
   }
   if (progress != null) { g.fillStyle = "#fff"; g.fillRect(progress * w, 0, 2 * dpr, h); }
