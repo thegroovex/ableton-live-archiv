@@ -123,3 +123,34 @@ test("Tastatur: Codes und Modifier", () => {
   assert.equal(L.keyEvent("Digit2", { shift: true }).clear, true);
   assert.equal(L.keyEvent("KeyZ"), null);
 });
+
+test("Tonhöhe: Tempo in Halbtönen und klingende Tonart", () => {
+  assert.ok(Math.abs(L.tempoSemis(Math.pow(2, 1 / 12)) - 1) < 1e-9);
+  assert.equal(L.tempoSemis(1), 0);
+  // A-Moll mit +5,95 % ohne Key Lock klingt wie A#-Moll
+  assert.ok(Math.abs(L.effectivePitch({ root: "A", rate: Math.pow(2, 1 / 12) }) - 10) < 1e-9);
+  assert.equal(L.effectivePitch({ root: "A", rate: 1.2, keylock: true }), 9);
+  assert.equal(L.effectivePitch({ root: "C", shift: -1 }), 11);
+  assert.equal(L.effectivePitch({ root: null }), null);
+  assert.deepEqual(L.pitchName(9.9), { root: "A#", cents: -10 });
+});
+
+test("Key Sync: gleiche Tonart, Paralleltonart, kompatibel, Repitch", () => {
+  const am = { root: "A", mode: "Moll", rate: 1, keylock: true };
+  // gleiche Tonart erzwingen: C-Moll → A-Moll = −3 Halbtöne
+  assert.equal(L.keySyncShift({ root: "C", mode: "Moll", rate: 1, keylock: true }, am, true), -3);
+  // kompatibel: C-Moll (5A) passt zu A-Moll (8A)? kleinste Verschiebung zu 8A/9A/7A → D-Moll (7A) = +2
+  assert.equal(L.keySyncShift({ root: "C", mode: "Moll", rate: 1, keylock: true }, am), 2);
+  // Paralleltonart: G-Dur → A-Moll heißt C-Dur (8B) = +5 bzw. −7 → kleinste: +5
+  assert.equal(L.keySyncShift({ root: "G", mode: "Dur", rate: 1, keylock: true }, am, true), 5);
+  // Repitch: gleiche Tonart, aber +6 % schneller → klingt einen Halbton höher → −1 zurück
+  assert.equal(L.keySyncShift({ root: "A", mode: "Moll", rate: Math.pow(2, 1 / 12), keylock: false }, am, true), -1);
+  // anderes Deck ist transponiert
+  assert.equal(L.keySyncShift({ root: "A", mode: "Moll", rate: 1, keylock: true }, { ...am, shift: 2 }, true), 2);
+  assert.equal(L.keySyncShift({ root: null, mode: "Moll" }, am), null);
+  // Hysterese am Tritonus: bleibt auf der bisherigen Richtung
+  const tri = L.keySyncShift({ root: "D#", mode: "Moll", rate: 1, keylock: true }, am, true, -6);
+  assert.equal(Math.abs(tri), 6);
+  assert.equal(tri, -6);
+  assert.equal(L.keySyncShift({ root: "D#", mode: "Moll", rate: 1, keylock: true }, am, true, 6), 6);
+});
