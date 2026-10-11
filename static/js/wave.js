@@ -44,12 +44,36 @@
     return { peaks, low, mid, high, perSecond: sampleRate / block };
   }
 
+  /* Onset-Hüllkurve für die Beatgrid-Erkennung: Energie je Fenster (hop Sekunden) und deren positiver Anstieg.
+     Bässe/Kick werden betont (Tiefpass ~150 Hz), Höhen (Hi-Hats/Snare-Attack) über Differenz mitgenommen. */
+  function onsetEnvelope(ch0, ch1, sampleRate, hop = 0.005) {
+    ch1 = ch1 || ch0;
+    const step = Math.max(1, Math.round(sampleRate * hop)), n = Math.floor(ch0.length / step);
+    const rms = new Float32Array(n), flux = new Float32Array(n);
+    const aL = 1 - Math.exp(-2 * Math.PI * 150 / sampleRate);
+    let lp = 0, prevL = 0, prevF = 0, prevX = 0;
+    for (let i = 0; i < n; i++) {
+      let e = 0, eL = 0, eH = 0;
+      for (let j = i * step, end = j + step; j < end; j++) {
+        const x = (ch0[j] + ch1[j]) * 0.5;
+        lp += aL * (x - lp);
+        const d = x - prevX; prevX = x;
+        e += x * x; eL += lp * lp; eH += d * d;
+      }
+      rms[i] = Math.sqrt(e / step);
+      const l = Math.log1p(1000 * Math.sqrt(eL / step)), f = Math.log1p(1000 * Math.sqrt(eH / step));
+      flux[i] = Math.max(0, l - prevL) + 0.5 * Math.max(0, f - prevF);
+      prevL = l; prevF = f;
+    }
+    return { rms, flux, hop: step / sampleRate };
+  }
+
   function fromBuffer(buffer, perSecond = 150) {
     const ch0 = buffer.getChannelData(0), ch1 = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : ch0;
     return computeBands(ch0, ch1, buffer.sampleRate, perSecond);
   }
 
-  const api = { LOW_HZ, HIGH_HZ, bandRGB, bandColor, computeBands, fromBuffer };
+  const api = { LOW_HZ, HIGH_HZ, bandRGB, bandColor, computeBands, fromBuffer, onsetEnvelope };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Wave = api;
 })(typeof window !== "undefined" ? window : globalThis);
