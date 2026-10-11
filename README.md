@@ -6,6 +6,14 @@ Ordnung für deine Ableton-Live-12-Projekte – plus DJ-Modus für den Pioneer D
 
 **Läuft auf macOS (führend) und Windows 10/11.** Die Oberfläche gibt es auf Deutsch und Englisch.
 
+## Download
+| System | Download | Start |
+|---|---|---|
+| 🍎 macOS | [Live-Archiv-macOS.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-macOS.zip) | entpacken, `start.command` doppelklicken (beim ersten Mal Rechtsklick → Öffnen, weil macOS heruntergeladene Skripte blockiert) |
+| 🪟 Windows | [Live-Archiv-Windows.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-Windows.zip) | entpacken, `start.bat` doppelklicken (bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“) |
+
+Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/releases). Die ZIPs baut GitHub Actions automatisch bei jedem Versions-Tag (`v1.2.3`). Voraussetzung ist Python 3.10+ (siehe Installation).
+
 ## Funktionen
 **Archiv**
 - Scannt deine Projektordner nach `.als`-Sets (Backups werden ignoriert) und liest Tempo, Tonart (Live-12-Skala), Spuren, Clips, Länge, Automationen, Plug-ins und fehlende Samples – ohne Live zu öffnen.
@@ -30,12 +38,12 @@ Ordnung für deine Ableton-Live-12-Projekte – plus DJ-Modus für den Pioneer D
 
 ### macOS
 1. Python 3.10+ (vorinstalliert oder `brew install python`). Optional: `brew install ffmpeg`.
-2. Ordner entpacken/klonen, `start.command` doppelklicken (beim ersten Start werden die Pakete installiert).
+2. ZIP herunterladen und entpacken (oder klonen), `start.command` doppelklicken (beim ersten Start werden die Pakete installiert).
 3. Die App öffnet sich in Chrome unter http://127.0.0.1:5077 (für den FLX4 Chrome oder Edge verwenden, Safari kann kein MIDI).
 
 ### Windows 10/11
 1. Python 3.10+ von python.org installieren (Haken bei „Add python.exe to PATH“). Optional: `winget install ffmpeg`.
-2. Ordner entpacken/klonen, `start.bat` doppelklicken (beim ersten Start werden die Pakete installiert).
+2. ZIP herunterladen und entpacken (oder klonen), `start.bat` doppelklicken (beim ersten Start werden die Pakete installiert).
 3. Die App öffnet sich in Chrome oder Edge unter http://127.0.0.1:5077.
 4. Für den FLX4 den Pioneer-ASIO-/Audio-Treiber installieren; Chrome/Edge sehen ihn dann als 4-Kanal-Ausgang.
 
