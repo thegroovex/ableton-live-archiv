@@ -38,25 +38,43 @@ def _front_window_title() -> str:
         return ""
 
 
-def _dismiss_save_dialog() -> None:
-    """Klickt 'Nicht sichern' / "Don't Save", falls Live beim Wechsel fragt."""
+def _dismiss_save_dialog() -> str:
+    """Beantwortet Lives Frage "Änderungen sichern?" mit 'Nicht sichern'.
+
+    Live schreibt "Don’t Save" mit typografischem Apostroph, deshalb wird nur auf Wortanfänge geprüft.
+    Findet sich kein bedienbarer Knopf, aber ein Dialogfenster, wird Cmd+D gesendet
+    (macOS-Kürzel für "Nicht sichern"), nur dann, wenn wirklich ein Dialog vorne ist.
+    """
     script = f'''
     tell application "System Events" to tell process "{LIVE_PROCESS}"
         repeat with w in windows
+            set sr to ""
+            try
+                set sr to subrole of w
+            end try
             repeat with b in (buttons of w)
-                set n to name of b
-                if n is in {{"Don't Save", "Nicht sichern", "Nein", "No"}} then
+                set n to ""
+                try
+                    set n to (name of b) as text
+                end try
+                if (n starts with "Don" and n contains "Save") or n contains "Nicht sichern" or n contains "Nicht speichern" or n is "Nein" or n is "No" then
                     click b
                     return "clicked"
                 end if
             end repeat
+            if sr is in {{"AXDialog", "AXSystemDialog"}} then
+                set frontmost to true
+                delay 0.2
+                keystroke "d" using {{command down}}
+                return "key"
+            end if
         end repeat
     end tell
     return "none"'''
     try:
-        _osa(script, timeout=10)
+        return _osa(script, timeout=10)
     except Exception:
-        pass
+        return "error"
 
 
 def open_in_live(als_path: str, app_name: str) -> None:
@@ -149,6 +167,10 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
         shutil.move(target, final)
     for extra in glob.glob(os.path.join(out_dir, out_name + "*.wav")):
         os.remove(extra)
+    for _ in range(3):  # Live fragt nach dem Export oft nach dem Sichern
+        time.sleep(1)
+        if _dismiss_save_dialog() in ("clicked", "key"):
+            break
     log("Fertig gerendert.")
     return final
 
