@@ -46,21 +46,23 @@ $$("[data-close]").forEach(b => b.onclick = closeModals);
 $$(".modal").forEach(m => m.addEventListener("mousedown", e => { if (e.target === m) closeModals(); }));
 
 // Hintergrund-Jobs (Statusleiste)
-let jobWasRunning = false;
+let jobWasRunning = false, pollTimer = null, lastLogLen = 0;
 const jobListeners = [];
+function pollNow() { clearTimeout(pollTimer); pollJob(); }  // nach Start eines Jobs sofort abfragen
 async function pollJob() {
   try {
     const j = await api("/api/job");
     const pct = j.total ? Math.round(100 * j.done / j.total) : 0;
-    $("#job-bar").style.width = (j.running ? pct : 0) + "%";
+    $("#job-bar").style.width = (j.running ? Math.max(pct, 3) : (jobWasRunning ? 100 : 0)) + "%";
+    $("#job-bar").classList.toggle("indeterminate", j.running && !j.total);
     $("#btn-cancel").hidden = !j.running;
     const last = j.log[j.log.length - 1] || "";
     $("#job-text").textContent = j.running ? `${j.name}: ${j.done}/${j.total} – ${last.slice(9)}` : (last ? last.slice(9) : "Bereit");
-    if (jobWasRunning && !j.running) jobListeners.forEach(fn => fn(j));
+    if (jobWasRunning && !j.running) { jobListeners.forEach(fn => fn(j)); toast(last.slice(9)); setTimeout(() => { if (!jobWasRunning) $("#job-bar").style.width = "0%"; }, 3000); }
     jobWasRunning = j.running;
     if (j.running && j.done % 5 === 0) jobListeners.forEach(fn => fn(j, true));
   } catch (e) { /* Server neu gestartet */ }
-  setTimeout(pollJob, jobWasRunning ? 700 : 2000);
+  pollTimer = setTimeout(pollJob, jobWasRunning ? 400 : 3000);
 }
 $("#btn-cancel").onclick = () => api("/api/job/cancel", { method: "POST" });
 pollJob();
@@ -98,4 +100,13 @@ function drawOverview(canvas, peaks, color, progress = null, cues = []) {
   }
   if (progress != null) { g.fillStyle = "#fff"; g.fillRect(progress * w, 0, 2 * dpr, h); }
   cues.forEach((c, i) => { if (c == null) return; g.fillStyle = "#ff5f56"; g.fillRect(c * w, 0, 1.5 * dpr, h * 0.35); });
+}
+
+// Kurze Einblendung unten rechts
+function toast(msg) {
+  if (!msg) return;
+  let t = document.getElementById("toast");
+  if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 4000);
 }
