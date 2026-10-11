@@ -144,6 +144,32 @@ def live_is_running() -> bool:
     return res.returncode == 0
 
 
+def _clear_crash_markers() -> None:
+    """Damit Live nach dem harten Beenden nicht 'Wiederherstellen?' fragt."""
+    base = os.path.expanduser("~/Library/Preferences/Ableton")
+    for d in glob.glob(os.path.join(base, "Live 12*")):
+        for f in ("CrashDetection.cfg", "CrashRecoveryInfo.cfg"):
+            try:
+                os.remove(os.path.join(d, f))
+            except OSError:
+                pass
+
+
+def quit_live_hard(log=print) -> None:
+    """Beendet Live ohne Rückfrage. Nur für Sets, die Live Archiv selbst geöffnet hat
+    (Rendern startet nur bei geschlossenem Live), deshalb geht nichts verloren."""
+    if not live_is_running():
+        return
+    log("Schließe Live für das nächste Set …")
+    subprocess.run(["pkill", "-9", "-x", LIVE_PROCESS], capture_output=True)
+    for _ in range(40):
+        if not live_is_running():
+            break
+        time.sleep(0.5)
+    time.sleep(1)
+    _clear_crash_markers()
+
+
 def open_in_live(als_path: str, app_name: str, attempt: int = 0) -> None:
     if attempt % 2 == 0:
         subprocess.run(["open", "-a", app_name, als_path], check=True)
@@ -153,7 +179,7 @@ def open_in_live(als_path: str, app_name: str, attempt: int = 0) -> None:
 
 
 def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Ableton Live 12 Suite",
-               load_timeout: int = 120, render_timeout: int = 900, log=print) -> str:
+               load_timeout: int = 180, render_timeout: int = 900, log=print) -> str:
     """Öffnet das Set in Live, exportiert es und gibt den Pfad zur MP3 zurück."""
     os.makedirs(out_dir, exist_ok=True)
     set_name = os.path.splitext(os.path.basename(als_path))[0]
@@ -162,6 +188,8 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
 
     if not os.path.isfile(als_path):
         raise FileNotFoundError(f"Datei nicht gefunden: {als_path}. Übersprungen, bitte neu scannen.")
+    # Live vor jedem Set frisch starten: so gibt es nie "Save changes …?" und kein Untitled dazwischen.
+    quit_live_hard(log)
     # Heißt das Set wie das, was Live schon zeigt (z. B. "Untitled"), reicht der Fenstertitel nicht:
     # dann zählt die Datei hinter dem Fenster, oder mindestens ein Titelwechsel bzw. 15 s Ladezeit.
     ambiguous = _title_is(set_name, _front_window_title())
@@ -170,7 +198,7 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
     title_changed = False
     t0 = time.time()
     next_note = 20
-    reopen_at, attempt = 25, 0
+    reopen_at, attempt = 75, 0  # Kaltstart von Live mit Plug-ins dauert
     title = ""
     while time.time() - t0 < load_timeout:
         _dismiss_save_dialog()
@@ -190,7 +218,7 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
                 open_in_live(als_path, app_name, attempt)
             except Exception:
                 pass
-            reopen_at += 30
+            reopen_at += 45
         if waited >= next_note:
             log(f"Warte auf {set_name} ({int(waited)} s) … Live zeigt gerade „{title or 'kein Fenster'}“")
             next_note += 20
