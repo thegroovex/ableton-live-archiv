@@ -167,6 +167,12 @@ def load_settings() -> dict:
 def save_settings(s: dict) -> dict:
     cur = load_settings()
     cur.update({k: v for k, v in s.items() if k in DEFAULT_SETTINGS})
+    from core.als_parser import clean_path
+    if isinstance(cur.get("roots"), list):
+        cur["roots"] = [clean_path(r) for r in cur["roots"] if r.strip()]
+    for k in ("template", "new_project_dir"):
+        if isinstance(cur.get(k), str) and cur[k].strip():
+            cur[k] = clean_path(cur[k])
     os.makedirs(HOME, exist_ok=True)
     with open(SETTINGS_PATH, "w") as fh:
         json.dump(cur, fh, indent=2, ensure_ascii=False)
