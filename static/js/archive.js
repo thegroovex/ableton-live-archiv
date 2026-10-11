@@ -82,19 +82,8 @@ function pumpMinis() {
   }
 }
 function drawMini(c, id) {
-  const d = A.mini[id]; if (!d || !d.amp.length) return;
-  const g = c.getContext("2d"), W = c.width, H = c.height, n = d.amp.length, bw = W / n, mid = H / 2;
-  g.clearRect(0, 0, W, H);
   const prog = A.playing === id && A.audio.duration ? A.audio.currentTime / A.audio.duration : -1;
-  for (let i = 0; i < n; i++) {
-    const lo = d.low[i], mi = d.mid[i], hi = d.high[i];
-    // Farbe mischen: Bass = Blau, Mitten = Orange, Höhen = Weiß
-    const played = prog >= 0 && i / n <= prog;
-    g.fillStyle = Wave.bandColor(lo, mi, hi, played ? 0.45 : 1);
-    const h = Math.max(1, d.amp[i] * (H - 2));
-    g.fillRect(i * bw, mid - h / 2, Math.max(1, bw - 0.4), h);
-  }
-  if (prog >= 0) { g.fillStyle = "#fff"; g.fillRect(prog * W, 0, 2, H); }
+  drawMiniWave(c, A.mini[id], prog);
 }
 function drawPlayingMini() {
   if (!A.playing) return;
