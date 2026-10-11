@@ -89,7 +89,9 @@ test("Beatgrid: Einrasten, Downbeat, Takt", () => {
   near(L.snapToBeat(1.26, 120, 0), 1.5);
   near(L.snapToBeat(1.26, 120, 0, "floor"), 1.0);
   near(L.gridFromDownbeat(10.1, 120), 0.1);
-  near(L.normGrid(-0.1, 120), 0.4);
+  near(L.normGrid(-0.1, 120), 1.9);   // Takt (4 Beats) = 2 s
+  near(L.gridFromDownbeat(10.6, 120), 0.6);
+  near(L.regrid(10.5, 120, 0, 100), L.normGrid(10.5 - 21 * 0.6, 100));
   assert.deepEqual(L.barBeat(2.6, 120, 0), { index: 5, beat: 2, bar: 2 });
 });
 
