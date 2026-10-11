@@ -159,3 +159,18 @@ def test_remove_project_stays_hidden_after_rescan(home, tmp_path):
     assert db.get(pid) is None
     assert "/x/Weg.als" in db.hidden_paths()
     assert c.post("/api/hidden/clear").get_json()["restored"] == 1
+
+
+def test_mini_waveform_peaks(home, tmp_path):
+    import numpy as np, soundfile as sf
+    import app as appmod
+    from core import db
+    sr = 22050
+    t = np.linspace(0, 6, sr * 6, endpoint=False)
+    y = 0.6 * np.sin(2 * np.pi * 60 * t) * (t < 3) + 0.4 * np.sin(2 * np.pi * 5000 * t) * (t >= 3)
+    wav = tmp_path / "w.wav"; sf.write(wav, y, sr)
+    pid = db.upsert({"path": "/x/W.als", "name": "W", "mp3_path": str(wav)})
+    d = appmod.app.test_client().get(f"/api/peaks/{pid}").get_json()
+    assert len(d["amp"]) == 160 and max(d["amp"]) == 1.0
+    assert d["low"][10] > 0.8 and d["high"][150] > 0.8   # Bass vorne, Höhen hinten
+    assert abs(d["duration"] - 6) < 0.1
