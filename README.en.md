@@ -27,6 +27,9 @@ All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/relea
 **DJ**
 - Two decks with scrolling waveform, beatgrid, overview, hot cues (8 per deck, saved), beat loops, loop in/out, beat jump, sync (incl. phase), tempo ±6/10/16/50 %, scratching and nudging.
 - Scrolling waveform: drag to move (Shift = fine), mouse wheel or ＋/－ to zoom (1–32 s), double-click sets the cue.
+- **Import with folder browser:** click through folders (home, Music, Downloads, external volumes or Windows drives) or type a path; subfolders are included.
+- **Analyze in the DJ tab:** selected tracks, all not yet analyzed, or the whole library (BPM, key, genre, mood, waveform).
+- **Tag editor** (✎ or ⌘I / Ctrl+I): title, artist, BPM, key, genre, mood, tags, rating, notes – also for several tracks at once. Later analyses never overwrite your values; optionally title, artist, genre, BPM and key are written into the audio file (ID3/Vorbis/MP4). Search also finds tags and notes.
 - Beatgrid: automatic bar-1 detection (**AUTO** button), fine adjustment in ms, grid stays bar-aligned when the BPM changes.
 - Mixer: trim, 3-band EQ with kill, color filter, channel faders, crossfader, headphone cue and cue/master mix, VU meters.
 - Library of your rendered MP3s plus imported music (folder import or drag & drop; BPM/key are analyzed), colored mini waveforms, harmonically matching tracks highlighted in green.
