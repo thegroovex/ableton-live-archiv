@@ -120,13 +120,62 @@
     return Math.max(0, grid + k * period);
   }
   /* Grid-Offset immer in [0, Beatlänge) halten */
+  /* Grid-Offset = Zeit des ersten Downbeats (Takt-„1“), auf einen Takt (4 Beats) normiert,
+     damit die Taktposition erhalten bleibt und nicht nur die Beat-Phase. */
   function normGrid(grid, bpm) {
     if (!bpm) return grid;
-    const p = 60 / bpm; let g = grid % p; if (g < 0) g += p;
+    const bar = 4 * 60 / bpm; let g = grid % bar; if (g < 0) g += bar;
+    if (bar - g < 1e-6) g = 0;
     return Math.round(g * 1e5) / 1e5;
   }
-  /* Downbeat genau hier setzen: Grid so verschieben, dass pos auf einem Beat liegt */
+  /* Downbeat genau hier setzen: pos wird zur „1“ des Takts */
   function gridFromDownbeat(pos, bpm) { return normGrid(pos, bpm); }
+  /* BPM ändern, ohne dass der Beat unter anchor oder die Taktzählung verrutscht */
+  function regrid(anchor, oldBpm, oldGrid, newBpm) {
+    if (!oldBpm) return normGrid(anchor, newBpm);
+    const idx = Math.round((anchor - oldGrid) / (60 / oldBpm));
+    return normGrid(anchor - idx * 60 / newBpm, newBpm);
+  }
+  /* Automatische Beatgrid-Erkennung bei bekanntem BPM.
+     flux/rms: Onset-Hüllkurve (Wave.onsetEnvelope), hop in Sekunden.
+     1) Phase: die Beat-Phase, deren Raster die meiste Onset-Energie trifft (über den ganzen Track).
+     2) Anfang: der erste hörbare Einsatz wird zur „1“ – wie bei Rekordbox, wenn ein Track auf dem Downbeat beginnt.
+     Liefert { grid, first, phase, confidence }. */
+  function detectGrid(flux, rms, hop, bpm) {
+    const n = flux.length;
+    if (!bpm || !n) return { grid: 0, first: 0, phase: 0, confidence: 0 };
+    const period = 60 / bpm, beatFrames = period / hop;
+    // erster hörbarer Einsatz: erstes Fenster über -30 dB relativ zum Maximum
+    let maxR = 0; for (let i = 0; i < n; i++) if (rms[i] > maxR) maxR = rms[i];
+    const thr = maxR * 0.0316;
+    let start = 0; while (start < n && rms[start] < thr) start++;
+    if (start >= n) return { grid: 0, first: 0, phase: 0, confidence: 0 };
+    // Attack genau bestimmen: stärkster Anstieg in den ersten 60 ms ab dem Einsatz, dann zurück zum Beginn des Anstiegs
+    let pk = start, pkV = -1;
+    for (let i = Math.max(0, start - 2); i < Math.min(n, start + Math.round(0.06 / hop)); i++) if (flux[i] > pkV) { pkV = flux[i]; pk = i; }
+    let a = pk; while (a > 0 && flux[a - 1] > pkV * 0.25 && pk - a < 4) a--;
+    const first = Math.max(0, a * hop);
+    // Phase über Raster-Treffer (±1 Fenster) bewerten
+    const score = ph => {
+      let s = 0;
+      for (let t = ph; t < n - 1; t += beatFrames) {
+        const k = Math.round(t); if (k < 1) continue;
+        s += Math.max(flux[k - 1], flux[k], flux[k + 1]);
+      }
+      return s;
+    };
+    const steps = Math.max(8, Math.ceil(beatFrames * 2)), scores = [];
+    let best = 0, bestS = -1;
+    for (let i = 0; i < steps; i++) { const ph = i * beatFrames / steps, v = score(ph); scores.push(v); if (v > bestS) { bestS = v; best = ph; } }
+    const mean = scores.reduce((x, y) => x + y, 0) / scores.length || 1;
+    const confidence = Math.max(0, Math.min(1, (bestS / mean - 1) / 2));
+    const phase = best * hop;
+    // Downbeat: Raster-Beat am ersten Einsatz. Ist der Einsatz klar (nahe am Raster oder Raster unsicher), gilt der Einsatz selbst.
+    const k = Math.round((first - phase) / period), onGrid = phase + k * period;
+    const dist = Math.abs(first - onGrid);
+    const down = dist < 0.035 || confidence < 0.15 ? first : onGrid;
+    return { grid: normGrid(down, bpm), first, phase: phase % period, confidence };
+  }
   /* Takt-Position 1..4 und Beatnummer seit Grid-Start */
   function barBeat(pos, bpm, grid = 0) {
     if (!bpm) return { beat: 0, bar: 0, index: 0 };
@@ -205,7 +254,7 @@
     return ev;
   }
 
-  const api = { snapToBeat, normGrid, gridFromDownbeat, barBeat, tapTempo, loopHalve, loopDouble, loopMove, loopBeats, loopLabel,
+  const api = { snapToBeat, normGrid, gridFromDownbeat, regrid, detectGrid, barBeat, tapTempo, loopHalve, loopDouble, loopMove, loopBeats, loopLabel,
     phaseOffset, KEYMAP, keyEvent, clamp, TEMPO_RANGES, sliderToRate, knobToEqDb, trimToGain, crossfaderGains, filterParams, syncRate,
     beatPhase, phaseCorrection, beatLoop, beatJump, cuePress, cueRelease, hotcuePress, scratchVelocity, camelotCompatible };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
