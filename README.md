@@ -1,11 +1,15 @@
 # Live Archiv
 
+🇩🇪 Deutsch · [🇬🇧 English](README.en.md)
+
 Ordnung für deine Ableton-Live-12-Projekte – plus DJ-Modus für den Pioneer DDJ-FLX4.
+
+**Läuft auf macOS (führend) und Windows 10/11.** Die Oberfläche gibt es auf Deutsch und Englisch.
 
 ## Funktionen
 **Archiv**
 - Scannt deine Projektordner nach `.als`-Sets (Backups werden ignoriert) und liest Tempo, Tonart (Live-12-Skala), Spuren, Clips, Länge, Automationen, Plug-ins und fehlende Samples – ohne Live zu öffnen.
-- Exportiert jedes Set automatisch über Live 12 als MP3 (AppleScript steuert den Export-Dialog).
+- Exportiert jedes Set automatisch über Live 12 als MP3 (macOS: AppleScript, Windows: Win32-Tastatursteuerung des Export-Dialogs).
 - Analysiert die MP3s: Tonart (falls im Set nicht gesetzt), Energie, Stimmung, Genre-Vorschlag.
 - Einstufung „Fertig“ oder „Skizze“ anhand von Arrangement-Länge, Clips, Spuren, Automation und Dateiname.
 - Suchmaske: Volltext, Tempo von/bis, Tonart + Dur/Moll, Genre, Stimmung, Status, Bewertung. Camelot-Anzeige.
@@ -15,20 +19,45 @@ Ordnung für deine Ableton-Live-12-Projekte – plus DJ-Modus für den Pioneer D
 **DJ**
 - Zwei Decks mit Scroll-Wellenform, Beatgrid, Übersicht, Hot Cues (8 je Deck, gespeichert), Beat-Loops, Loop In/Out, Beat-Jump, Sync (inkl. Phase), Tempo ±6/10/16/50 %, Scratchen und Nudgen.
 - Mixer: Trim, 3-Band-EQ mit Kill, Color-Filter, Kanalfader, Crossfader, Kopfhörer-Cue und Cue/Master-Mix, VU-Meter.
-- Bibliothek aus deinen gerenderten MP3s plus importierter Musik (Ordner-Import oder Drag & Drop; BPM/Tonart werden analysiert). Harmonisch passende Tracks werden grün markiert.
+- Bibliothek aus deinen gerenderten MP3s plus importierter Musik (Ordner-Import oder Drag & Drop; BPM/Tonart werden analysiert). Harmonisch passende Tracks werden grün markiert. Farbige Mini-Wellenformen in der Liste.
+- **Playlists (Crates) wie in Serato DJ Pro:** Crate-Spalte links (Alle Tracks, Live-Renderings, Importiert, eigene Playlists), Trackliste rechts mit Suche (⌘F / Strg+F). Tracks per Drag & Drop oder ＋ hinzufügen (Mehrfachauswahl mit ⌘/Strg und Shift), in der Playlist per Ziehen sortieren, mit Entf entfernen. Playlists umbenennen (Doppelklick), sortieren und löschen.
+- Beatgrid: automatische Erkennung von Takt 1 (Knopf **AUTO**), Feinjustage in ms, Grid bleibt beim BPM-Ändern taktstabil.
+- Scroll-Wellenform: ziehen zum Verschieben (Shift = fein), Mausrad/＋/－ zum Zoomen (1–32 s), Doppelklick setzt den Cue.
 - **DDJ-FLX4** per Web MIDI: Play, Cue, Jogs, Tempo, EQ, Filter, Fader, Crossfader, Pads (Hot Cue, Beat Loop, Beat Jump), Load, Browse, LEDs und VU-Meter. Über den FLX4 als 4-Kanal-Audiogerät läuft der Master auf 1/2 und der Kopfhörer auf 3/4.
 - Tastatur: Q/W/E = Play/Cue/Sync Deck A, P/O/I = Deck B, 1–4 und 7–0 = Hot Cues, ↑↓ = Browse, ←/→ = in Deck A/B laden.
 
-## Installation (macOS)
+## Installation
+
+### macOS
 1. Python 3.10+ (vorinstalliert oder `brew install python`). Optional: `brew install ffmpeg`.
 2. Ordner entpacken/klonen, `start.command` doppelklicken (beim ersten Start werden die Pakete installiert).
 3. Die App öffnet sich in Chrome unter http://127.0.0.1:5077 (für den FLX4 Chrome oder Edge verwenden, Safari kann kein MIDI).
 
+### Windows 10/11
+1. Python 3.10+ von python.org installieren (Haken bei „Add python.exe to PATH“). Optional: `winget install ffmpeg`.
+2. Ordner entpacken/klonen, `start.bat` doppelklicken (beim ersten Start werden die Pakete installiert).
+3. Die App öffnet sich in Chrome oder Edge unter http://127.0.0.1:5077.
+4. Für den FLX4 den Pioneer-ASIO-/Audio-Treiber installieren; Chrome/Edge sehen ihn dann als 4-Kanal-Ausgang.
+
 ## Einmalige Einrichtung
-- ⚙ Einstellungen: Projektordner (z. B. `~/Music/Ableton`), Vorlage `.als` für neue Projekte.
-- Für den automatischen Export: Systemeinstellungen → Datenschutz & Sicherheit → **Bedienungshilfen** → Terminal erlauben.
-- In Live einmal „Audio/Video exportieren“ (⇧⌘R) öffnen: Gerenderte Spur „Main“, ganzes Arrangement, **MP3 kodieren** an. Live merkt sich das.
+- ⚙ Einstellungen: Sprache (Automatisch/Deutsch/English, auch per DE/EN-Knopf oben rechts), Projektordner (macOS z. B. `~/Music/Ableton`, Windows z. B. `~/Documents/Ableton`), Vorlage `.als` für neue Projekte, Name der Live-App (z. B. „Ableton Live 12 Suite“).
+- In Live einmal „Audio/Video exportieren“ (macOS ⇧⌘R, Windows Strg+Shift+R) öffnen: Gerenderte Spur „Main“, ganzes Arrangement, **MP3 kodieren** an. Live merkt sich das.
+- **Nur macOS:** Für den automatischen Export Systemeinstellungen → Datenschutz & Sicherheit → **Bedienungshilfen** → Terminal erlauben.
+- **Nur Windows:** Live wird unter `C:\ProgramData\Ableton\…` gesucht, sonst über die `.als`-Dateizuordnung gestartet. Zwischen zwei Sets wird Live beendet und frisch gestartet (Rendern startet nur bei geschlossenem Live, es geht also nichts verloren).
 - Während des Renderns Maus und Tastatur nicht benutzen.
+
+## Plattformen
+| | macOS | Windows |
+|---|---|---|
+| Archiv, Suche, Analyse, DJ-Modus, FLX4 | ✔ | ✔ |
+| Automatischer MP3-Export | AppleScript + Bedienungshilfen | Win32 (SendInput), ohne Zusatzrechte |
+| Datei zeigen | Finder | Explorer |
+| Start | `start.command` | `start.bat` |
+
+macOS ist die führende Plattform: neue Funktionen entstehen dort zuerst. Alles Systemabhängige liegt in `core/platform_util.py`, der Export in `core/renderer.py` (macOS) bzw. `core/renderer_win.py` (Windows).
+
+## Sprache
+Die Oberfläche ist auf Deutsch geschrieben; `static/js/i18n.js` übersetzt sie zur Laufzeit ins Englische und ersetzt auf Windows Mac-Begriffe (⌘ → Strg/Ctrl, Finder → Explorer). Neue Texte dort im Wörterbuch `EN` (feste Texte) oder in `P` (Texte mit Werten) ergänzen; ein Test prüft, dass alle Texte in `index.html` übersetzt sind.
 
 ## Tests
 ```
@@ -36,7 +65,7 @@ pip install -r requirements.txt pytest
 python -m pytest -v
 node --test tests/js/*.test.js
 ```
-Die Tests laufen bei jedem Push automatisch auf macOS (GitHub Actions). Getestet werden Set-Parser, Klassifizierung, Datenbank und Suchfilter, alle API-Endpunkte, Audio-Analyse an synthetischen Tracks, der Render-Ablauf mit simuliertem Live, das AppleScript (Kompilierung auf macOS), das FLX4-MIDI-Mapping, die DJ-Logik und die Audio-Engine.
+Die Tests laufen bei jedem Push automatisch auf macOS und Windows (GitHub Actions). Getestet werden Set-Parser, Klassifizierung, Datenbank und Suchfilter, alle API-Endpunkte, Audio-Analyse an synthetischen Tracks, der Render-Ablauf mit simuliertem Live, das AppleScript (Kompilierung auf macOS), der Windows-Export mit simuliertem Live, Playlists, das FLX4-MIDI-Mapping, die DJ-Logik, die Beatgrid-Erkennung, die Audio-Engine und die Übersetzung.
 
 ## Daten
-Alles liegt in `~/LiveArchiv` (Datenbank, MP3s, importierte Musik). Deine Live-Sets werden nie verändert.
+Alles liegt in `~/LiveArchiv` bzw. unter Windows in `%USERPROFILE%\LiveArchiv` (Datenbank, Playlists, MP3s, importierte Musik). Deine Live-Sets werden nie verändert.
