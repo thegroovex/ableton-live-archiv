@@ -76,6 +76,8 @@
     <div class="spacer"></div>
     <input class="field dj-search" id="dj-q" placeholder="🔍 Titel, Artist, BPM, Tonart … (⌘F)" autocomplete="off">
     <select class="field" id="dj-out" style="width:220px" title="Audio-Ausgang"><option value="">Standard-Ausgang</option></select>
+    <button class="btn small" id="btn-dj-tags" title="Tags der markierten Tracks bearbeiten (⌘I)">✎ Tags</button>
+    <button class="btn small" id="btn-dj-analyze" title="BPM, Tonart, Genre und Stimmung bestimmen">Analysieren</button>
     <button class="btn small" id="btn-import">Ordner importieren</button>
   </div>
   <div class="djlib">
@@ -134,11 +136,36 @@
   <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="n-create">Anlegen & in Live öffnen</button></footer>
 </div></div>
 
-<div class="modal" id="m-import"><div class="dialog">
+<div class="modal" id="m-import"><div class="dialog fs-dialog">
   <header>Musik importieren</header>
-  <div class="body"><p>Ordner oder Datei-Pfad (z. B. <span class="mono">~/Music/DJ</span>). Unterordner werden mit eingelesen.</p>
-    <input class="field" id="i-path" placeholder="~/Music/DJ"></div>
-  <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="i-go">Importieren</button></footer>
+  <div class="fs-bar">
+    <button class="btn small" id="fs-up" title="Übergeordneter Ordner">↑</button>
+    <input class="field mono" id="i-path" placeholder="~/Music/DJ" autocomplete="off" title="Pfad eingeben und Enter drücken">
+  </div>
+  <div class="fs-body">
+    <aside class="fs-places" id="fs-places"></aside>
+    <div class="fs-list" id="fs-list"></div>
+  </div>
+  <div class="fs-info" id="fs-info"></div>
+  <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="i-go">Diesen Ordner importieren</button></footer>
+</div></div>
+
+<div class="modal" id="m-tags"><div class="dialog">
+  <header id="t-head">Tags bearbeiten</header>
+  <div class="body form" style="grid-template-columns:110px 1fr">
+    <label>Titel</label><input class="field" data-t="title">
+    <label>Artist</label><input class="field" data-t="artist">
+    <label>BPM</label><input class="field" data-t="bpm" type="number" step="0.01" min="40" max="250">
+    <label>Tonart</label><div style="display:flex;gap:4px"><select class="field" data-t="key_root"></select><select class="field" data-t="key_mode"><option value=""></option><option value="Dur">Dur</option><option value="Moll">Moll</option></select></div>
+    <label>Genre</label><input class="field" data-t="genre" list="genre-list">
+    <label>Stimmung</label><input class="field" data-t="mood" list="mood-list">
+    <label>Tags</label><input class="field" data-t="tags" placeholder="durch Komma getrennt">
+    <label>Bewertung</label><div class="rating" id="t-rating"></div>
+    <label>Notizen</label><textarea class="field" data-t="notes" rows="3"></textarea>
+    <label></label><label class="chk" id="t-file-row"><input type="checkbox" id="t-file"> Auch in die Audiodatei schreiben (Titel, Artist, Genre, BPM, Tonart)</label>
+  </div>
+  <div class="body t-hint" id="t-hint"></div>
+  <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="t-save">Speichern</button></footer>
 </div></div>
 
 <datalist id="genre-list"></datalist><datalist id="mood-list"></datalist>
