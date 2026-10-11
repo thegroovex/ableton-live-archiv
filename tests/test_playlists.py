@@ -45,3 +45,32 @@ def test_parallel_requests_do_not_share_connection(home):
     ts = [threading.Thread(target=worker) for _ in range(12)]
     [t.start() for t in ts]; [t.join() for t in ts]
     assert errors == []
+
+
+def test_folder_browser_analyze_and_tag_editor(home, tmp_path, monkeypatch):
+    import app as appmod
+    from core import db
+    music = tmp_path / "Musik"; (music / "House").mkdir(parents=True)
+    (music / "a.mp3").write_bytes(b"x"); (music / "notes.txt").write_text("x"); (music / ".hidden").mkdir()
+    c = appmod.app.test_client()
+    r = c.get(f"/api/fs/list?path={music}").get_json()
+    assert [d["name"] for d in r["dirs"]] == ["House"] and r["files"] == ["a.mp3"] and r["parent"] == str(tmp_path)
+    assert r["places"][0]["path"]
+
+    iid = db.add_import(dict(path=str(music / "a.mp3"), title="a", artist="", added=0))
+    uid = f"i{iid}"
+    r = c.patch("/api/dj/tags", json={"uids": [uid], "values": {"title": "Nachtzug", "artist": "Groove X", "genre": "Deep House",
+                                                              "bpm": "122", "tags": "warm, opener", "rating": 4}}).get_json()
+    assert r["ok"]
+    t = next(x for x in c.get("/api/dj/library").get_json() if x["uid"] == uid)
+    assert (t["title"], t["artist"], t["genre"], t["bpm"], t["tags"], t["rating"]) == ("Nachtzug", "Groove X", "Deep House", 122.0, ["warm", "opener"], 4)
+    # Analyse überschreibt die Nutzerwerte nicht
+    db.update_import(iid, {"genre": "Techno", "bpm": 130.0, "energy": 0.7})
+    t = db.get_import(iid)
+    assert t["genre"] == "Deep House" and t["bpm"] == 122.0 and t["energy"] == 0.7
+
+    started = []
+    monkeypatch.setattr(appmod, "run_job", lambda name, fn, uids: started.append(uids) or True)
+    assert c.post("/api/dj/analyze", json={"uids": [uid, "i999"]}).get_json()["count"] == 1
+    assert c.post("/api/dj/analyze", json={"mode": "missing"}).get_json()["count"] == 1
+    assert started == [[uid], [uid]]
