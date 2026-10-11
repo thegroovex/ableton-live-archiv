@@ -1,7 +1,7 @@
 /* DJ-Modus: 2 Decks, Mixer, Bibliothek, Steuerung per DDJ-FLX4 (Web MIDI) oder Tastatur/Maus */
 const DJ = {
   ctx: null, decks: [], lib: [], sel: 0, shift: [false, false], hi: new FLX4.HiRes(),
-  xfader: 0.5, headMix: 0.5, midiIn: null, midiOut: null, out4: false, ready: false,
+  xfader: 0.5, headMix: 0.5, midiIn: null, midiOut: null, out4: false, ready: false, quantize: true,
 };
 
 // --------------------------------------------------------------- Audio-Grundgerüst
@@ -68,6 +68,7 @@ class Deck {
     this.cue = 0; this.cues = Array(8).fill(null); this.loop = null; this.loopIn = null;
     this.eq = { hi: 0.5, mid: 0.5, lo: 0.5 }; this.trim = 0.5; this.vol = 1; this.filter = 0.5; this.pfl = false;
     this.touch = false; this.ticks = 0; this.bendTimer = null;
+    this.keylock = false; this.autoBeats = 4; this.taps = []; this.nudging = 0; this.saveTimer = null;
     this.el = $(`#deck-${i}`);
     this.render();
   }
@@ -91,7 +92,9 @@ class Deck {
     this.applyAll();
     if (this.buffer) this.sendBuffer();
   }
-  applyAll() { this.applyEq(); this.applyTrim(); this.applyVol(); this.applyFilter(); this.applyRate(); this.applyPfl(); }
+  applyAll() { this.applyEq(); this.applyTrim(); this.applyVol(); this.applyFilter(); this.applyRate(); this.applyPfl(); this.applyKeylock(); }
+  applyKeylock() { this.node?.port.postMessage({ type: "keylock", value: this.keylock }); }
+  toggleKeylock() { this.keylock = !this.keylock; this.applyKeylock(); this.renderState(); }
   applyEq() { if (!this.lo) return; this.lo.gain.value = DJL.knobToEqDb(this.eq.lo); this.mid.gain.value = DJL.knobToEqDb(this.eq.mid); this.hiF.gain.value = DJL.knobToEqDb(this.eq.hi); }
   applyTrim() { if (this.trimG) this.trimG.gain.value = DJL.trimToGain(this.trim); }
   applyVol() { if (this.fader) this.fader.gain.value = this.vol * this.vol; }
@@ -129,6 +132,9 @@ class Deck {
   seek(sec) { this.pos = DJL.clamp(sec, 0, this.duration); this.node?.port.postMessage({ type: "seek", sec: this.pos }); }
   setPlay(on) {
     if (!this.track) return;
+    const o = DJ.decks[1 - this.i];   // Sync + Quantize: beim Start sofort im Takt mit dem anderen Deck
+    if (on && !this.playing && this.synced && DJ.quantize && o.playing && o.bpm && this.bpm)
+      this.seek(this.pos + DJL.phaseCorrection(this.pos, this.bpm, this.grid, o.pos, o.bpm, o.grid));
     this.playing = on; this.node?.port.postMessage({ type: "play", value: on });
     this.updateLeds(); this.renderState();
   }
@@ -146,7 +152,7 @@ class Deck {
   hotcue(i, clear) {
     if (!this.track) return;
     if (clear) this.cues[i] = null;
-    else { const r = DJL.hotcuePress(this.cues, i, this.loopSnap(this.pos)); this.cues = r.cues; this.run(r.actions); }
+    else { const r = DJL.hotcuePress(this.cues, i, DJ.quantize ? this.loopSnap(this.pos) : this.pos); this.cues = r.cues; this.run(r.actions); }
     api(`/api/dj/cues/${this.track.kind}/${this.track.id}`, { method: "PUT", body: this.cues }).catch(() => {});
     this.updateLeds(); this.renderPads();
   }
@@ -155,15 +161,81 @@ class Deck {
     const period = 60 / this.bpm;
     return Math.max(0, this.grid + Math.round((pos - this.grid) / period) * period);
   }
-  setLoop(l) { if (l) this.lastLoop = l; this.loop = l; this.node?.port.postMessage({ type: "loop", start: l?.start ?? null, end: l?.end ?? null }); midiLed(FLX4.LED.loop(this.i, !!l)); this.renderState(); }
+  setLoop(l) {
+    if (l) this.lastLoop = l;
+    this.loop = l; this.node?.port.postMessage({ type: "loop", start: l?.start ?? null, end: l?.end ?? null });
+    if (l && this.pos >= l.end) this.seek(l.start + ((this.pos - l.start) % (l.end - l.start)));
+    if (l) this.loopIn = null;
+    midiLed(FLX4.LED.loop(this.i, !!l)); this.renderState();
+  }
+  q(pos) { return DJ.quantize ? DJL.snapToBeat(pos, this.bpm, this.grid) : pos; }
   beatloop(beats) {
     if (!this.track) return;
     if (this.loop && Math.abs((this.loop.end - this.loop.start) - beats * 60 / (this.bpm || 120)) < 1e-3) return this.setLoop(null);
-    this.setLoop(DJL.beatLoop(this.pos, this.bpm, this.grid, beats));
+    this.autoBeats = beats;
+    this.setLoop(DJL.beatLoop(this.pos, this.bpm, this.grid, beats, DJ.quantize));
   }
-  loopInPress() { this.loopIn = this.pos; }
-  loopOutPress() { if (this.loopIn != null && this.pos > this.loopIn) this.setLoop({ start: this.loopIn, end: this.pos }); }
+  autoLoop() { if (this.loop) this.setLoop(null); else this.beatloop(this.autoBeats); }
+  /* CDJ: IN setzt den Startpunkt (im Loop: verschiebt ihn), OUT schließt den Loop (im Loop: verschiebt das Ende) */
+  loopInPress() {
+    if (!this.track) return;
+    const p = this.q(this.pos);
+    if (this.loop) { if (p < this.loop.end - 0.02) this.setLoop({ start: p, end: this.loop.end }); return; }
+    this.loopIn = p; this.renderState();
+  }
+  loopOutPress() {
+    if (!this.track) return;
+    const p = this.q(this.pos);
+    if (this.loop) { if (p > this.loop.start + 0.02) this.setLoop({ start: this.loop.start, end: p }); return; }
+    if (this.loopIn != null && p > this.loopIn + 0.02) this.setLoop({ start: this.loopIn, end: p });
+  }
   reloop() { if (this.loop) this.setLoop(null); else if (this.lastLoop) { this.setLoop(this.lastLoop); this.seek(this.lastLoop.start); } }
+  loopHalve() { if (this.loop) this.setLoop(DJL.loopHalve(this.loop)); else { this.autoBeats = Math.max(1 / 32, this.autoBeats / 2); this.renderState(); } }
+  loopDouble() { if (this.loop) this.setLoop(DJL.loopDouble(this.loop, this.duration)); else { this.autoBeats = Math.min(64, this.autoBeats * 2); this.renderState(); } }
+  loopMove(dir) {
+    if (!this.loop) return;
+    const rel = this.pos - this.loop.start, l = DJL.loopMove(this.loop, dir);
+    this.setLoop(l); this.seek(l.start + Math.max(0, rel));
+  }
+
+  // ---- Beatgrid
+  saveGrid() {
+    this.track.grid_offset = DJL.normGrid(this.grid, this.bpm);
+    this.renderState();
+    clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => api(`/api/dj/grid/${this.track.kind}/${this.track.id}`, { method: "PATCH", body: { bpm: this.track.bpm, grid_offset: this.track.grid_offset } })
+      .then(() => toast?.("Beatgrid gespeichert")).catch(() => {}), 600);
+  }
+  gridShift(ms) { if (!this.track || !this.bpm) return; this.track.grid_offset = this.grid + ms / 1000; this.saveGrid(); }
+  gridHere() { if (!this.track || !this.bpm) return; this.track.grid_offset = DJL.gridFromDownbeat(this.pos, this.bpm); this.saveGrid(); }
+  setBpm(v) {
+    if (!this.track || !(v > 20 && v < 400)) return;
+    const anchor = this.bpm ? DJL.snapToBeat(this.pos, this.bpm, this.grid) : this.pos;   // Beat unter dem Abspielkopf bleibt stehen
+    this.track.bpm = Math.round(v * 100) / 100;
+    this.track.grid_offset = DJL.gridFromDownbeat(anchor, this.track.bpm);
+    this.saveGrid();
+  }
+  tap() {
+    const now = performance.now() / 1000;
+    this.taps.push(now); this.taps = this.taps.slice(-9);
+    const bpm = DJL.tapTempo(this.taps);
+    const b = this.el.querySelector("[data-tap]"); if (b) b.textContent = bpm ? "TAP " + bpm.toFixed(1) : "TAP …";
+    if (bpm) { clearTimeout(this.tapTimer); this.tapTimer = setTimeout(() => { this.setBpm(bpm); b.textContent = "TAP"; }, 1500); }
+  }
+
+  // ---- Tempo & Beatmatching
+  nudge(dir, on) {  // wie Pitch-Bend-Tasten: solange gehalten ±4 %
+    this.nudging = on ? dir : 0;
+    clearTimeout(this.bendTimer);
+    this.node?.port.postMessage({ type: "bend", value: on ? dir * 0.04 : 0 });
+  }
+  pitchStep(step) {
+    const range = DJL.TEMPO_RANGES[this.rangeIdx];
+    const v = DJL.clamp(this.slider + step / (2 * range), 0, 1);
+    const s = this.el.querySelector("[data-slider]"); if (s) s.value = v;
+    if (this.synced) { this.synced = false; midiLed(FLX4.LED.sync(this.i, false)); }
+    this.setSlider(v);
+  }
   beatjump(b) { this.seek(DJL.beatJump(this.pos, this.bpm, b)); }
   sync() {
     const other = DJ.decks[1 - this.i];
@@ -202,27 +274,59 @@ class Deck {
     this.el.innerHTML = `
       <div class="title"><span class="letter">${L}</span><b>${esc(t ? t.title : "Kein Track geladen")}</b><span class="timeinfo" data-time>–</span></div>
       <div class="meta"><span>${esc(t?.artist || "")}</span><span>${t ? keyLabel(t.key_root, t.key_mode) + " " + camelot(t.key_root, t.key_mode) : ""}</span><span>${esc(t?.genre || "")}</span></div>
-      <div style="display:flex;justify-content:space-between;align-items:end"><div class="bigbpm" data-bpm>–<small>BPM</small></div><div class="timeinfo" data-rate></div></div>
+      <div class="bpmrow">
+        <div class="bigbpm" data-bpm>–<small>BPM</small></div>
+        <div class="ratebox"><span class="timeinfo" data-rate></span><button class="btn small" data-mt title="Master Tempo: Tonhöhe bleibt beim Pitchen gleich">MT</button></div>
+        <canvas class="phase" title="Takt (1–4) und Versatz zum anderen Deck"></canvas>
+      </div>
       <canvas class="zoom"></canvas><canvas class="overview"></canvas>
       <div class="transport">
         <button class="round cue" data-cue>CUE</button><button class="round" data-play>▶❚❚</button>
         <button class="btn small" data-sync>SYNC</button>
-        <div class="loopbtns">${[1, 2, 4, 8, 16].map(b => `<button class="btn small" data-bl="${b}">${b}</button>`).join("")}</div>
-        <button class="btn small" data-jump="-4">◀◀</button><button class="btn small" data-jump="4">▶▶</button>
+        <button class="btn small" data-nudge="-1" title="Bremsen (halten)">◀ −</button><button class="btn small" data-nudge="1" title="Schieben (halten)">+ ▶</button>
+        <button class="btn small" data-jump="-4" title="4 Beats zurück">⇤4</button><button class="btn small" data-jump="4" title="4 Beats vor">4⇥</button>
+      </div>
+      <div class="looprow">
+        <span class="lbl">Loop</span>
+        <button class="btn small" data-lin>IN</button><button class="btn small" data-lout>OUT</button><button class="btn small" data-reloop>RELOOP/EXIT</button>
+        <button class="btn small" data-lhalf>½X</button><button class="btn small" data-ldbl>2X</button>
+        <span class="looplen" data-looplen>4</span>
+        <div class="loopbtns">${[1, 2, 4, 8, 16, 32].map(b => `<button class="btn small" data-bl="${b}">${b}</button>`).join("")}</div>
+      </div>
+      <div class="gridrow">
+        <span class="lbl">Grid</span>
+        <button class="btn small" data-gs="-10" title="Grid 10 ms früher (Shift: 1 ms)">◀</button><button class="btn small" data-gs="10" title="Grid 10 ms später (Shift: 1 ms)">▶</button>
+        <button class="btn small" data-ghere title="Beat genau an der Abspielposition">Beat hier</button>
+        <button class="btn small" data-bpmx="0.5">÷2</button><button class="btn small" data-bpmx="2">×2</button>
+        <button class="btn small" data-bpmd="-0.01">−.01</button><input class="field bpmin" data-bpmin value="${this.bpm ? this.bpm.toFixed(2) : ""}" placeholder="BPM"><button class="btn small" data-bpmd="0.01">+.01</button>
+        <button class="btn small" data-tap>TAP</button>
       </div>
       <div class="pads">${this.cues.map((c, i) => `<button class="pad" data-hc="${i}">${i + 1}</button>`).join("")}</div>
-      <div class="tempo"><button class="btn small" data-range>±10%</button><input type="range" min="0" max="1" step="0.0005" value="${this.slider}" data-slider title="Tempo (nach unten = schneller)"><button class="btn small" data-reset>0</button></div>`;
+      <div class="tempo"><button class="btn small" data-range>±10%</button><button class="btn small" data-pstep="-0.0005" title="Tempo −0,05 %">−</button><input type="range" min="0" max="1" step="0.0005" value="${this.slider}" data-slider title="Tempo (nach unten = schneller)"><button class="btn small" data-pstep="0.0005" title="Tempo +0,05 %">+</button><button class="btn small" data-reset>0</button></div>`;
     const q = s => this.el.querySelector(s);
+    const hold = (el, down, up) => { el.onmousedown = down; el.onmouseup = up; el.onmouseleave = () => { if (el._down) up(); }; el.addEventListener("mousedown", () => el._down = true); el.addEventListener("mouseup", () => el._down = false); };
     q("[data-play]").onclick = () => { djInitAudio(); this.setPlay(!this.playing); };
     q("[data-cue]").onmousedown = () => this.cuePress(); q("[data-cue]").onmouseup = () => this.cueRelease();
     q("[data-sync]").onclick = () => this.sync();
+    q("[data-mt]").onclick = () => this.toggleKeylock();
     q("[data-range]").onclick = () => this.cycleRange();
     q("[data-slider]").oninput = e => this.setSlider(+e.target.value);
     q("[data-reset]").onclick = () => { q("[data-slider]").value = 0.5; this.setSlider(0.5); };
+    this.el.querySelectorAll("[data-pstep]").forEach(b => b.onclick = () => this.pitchStep(+b.dataset.pstep));
+    this.el.querySelectorAll("[data-nudge]").forEach(b => hold(b, () => this.nudge(+b.dataset.nudge, true), () => this.nudge(0, false)));
     this.el.querySelectorAll("[data-bl]").forEach(b => b.onclick = () => this.beatloop(+b.dataset.bl));
     this.el.querySelectorAll("[data-jump]").forEach(b => b.onclick = () => this.beatjump(+b.dataset.jump));
+    q("[data-lin]").onclick = () => this.loopInPress(); q("[data-lout]").onclick = () => this.loopOutPress();
+    q("[data-reloop]").onclick = () => this.reloop(); q("[data-lhalf]").onclick = () => this.loopHalve(); q("[data-ldbl]").onclick = () => this.loopDouble();
+    this.el.querySelectorAll("[data-gs]").forEach(b => b.onclick = e => this.gridShift(+b.dataset.gs / (e.shiftKey ? 10 : 1)));
+    q("[data-ghere]").onclick = () => this.gridHere();
+    this.el.querySelectorAll("[data-bpmx]").forEach(b => b.onclick = () => this.setBpm(this.bpm * +b.dataset.bpmx));
+    this.el.querySelectorAll("[data-bpmd]").forEach(b => b.onclick = () => this.setBpm(this.bpm + +b.dataset.bpmd));
+    q("[data-bpmin]").onchange = e => this.setBpm(parseFloat(e.target.value.replace(",", ".")));
+    q("[data-tap]").onclick = () => this.tap();
     this.el.querySelectorAll("[data-hc]").forEach(b => b.onclick = e => this.hotcue(+b.dataset.hc, e.shiftKey));
     q(".overview").onclick = e => { const r = e.target.getBoundingClientRect(); this.seek((e.clientX - r.left) / r.width * this.duration); };
+    this.phaseC = q(".phase");
     this.zoomC = q(".zoom"); this.ovC = q(".overview");
     this.renderPads(); this.renderState();
   }
@@ -236,10 +340,41 @@ class Deck {
     q("[data-bpm]").innerHTML = (this.bpm ? this.effBpm.toFixed(2) : "–") + "<small>BPM</small>";
     q("[data-rate]").textContent = ((this.rate - 1) * 100 >= 0 ? "+" : "") + ((this.rate - 1) * 100).toFixed(2) + "%";
     this.el.querySelectorAll("[data-bl]").forEach(b => b.classList.toggle("on", !!this.loop && this.bpm && Math.abs((this.loop.end - this.loop.start) - b.dataset.bl * 60 / this.bpm) < 1e-3));
+    q("[data-mt]").classList.toggle("on", this.keylock);
+    q("[data-reloop]").classList.toggle("on", !!this.loop);
+    q("[data-lin]").classList.toggle("on", this.loopIn != null || !!this.loop);
+    q("[data-lout]").classList.toggle("on", !!this.loop);
+    const beats = this.loop ? DJL.loopBeats(this.loop, this.bpm) : this.autoBeats;
+    q("[data-looplen]").textContent = (this.loop ? "● " : "") + DJL.loopLabel(beats) + (this.bpm ? " Beats" : "");
+    q("[data-looplen]").classList.toggle("on", !!this.loop);
+    const bi = q("[data-bpmin]"); if (bi && document.activeElement !== bi) bi.value = this.bpm ? this.bpm.toFixed(2) : "";
+  }
+  /* Takt-Anzeige (1–4) und Phasen-Versatz zum anderen Deck, wie die Beat-Bars am CDJ */
+  drawPhase() {
+    const c = this.phaseC; if (!c) return;
+    const dpr = devicePixelRatio || 1, w = c.clientWidth * dpr, h = c.clientHeight * dpr;
+    if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
+    const g = c.getContext("2d"); g.clearRect(0, 0, w, h);
+    if (!this.track || !this.bpm) return;
+    const bb = DJL.barBeat(this.pos, this.bpm, this.grid), bw = w / 4, bh = h * 0.42;
+    for (let k = 0; k < 4; k++) { g.fillStyle = k + 1 === bb.beat ? this.color : "#333"; g.fillRect(k * bw + 1, 0, bw - 2, bh); }
+    g.fillStyle = "#999"; g.font = `${9 * dpr}px sans-serif`; g.fillText(`Takt ${Math.max(1, bb.bar)}`, 2, h - 2);
+    const o = DJ.decks[1 - this.i];
+    if (o.track && o.bpm && (this.playing || o.playing)) {
+      const off = DJL.phaseOffset(this.pos, this.bpm * 1, this.grid, o.pos, o.bpm, o.grid);  // Beats
+      const ms = off * 60000 / this.effBpm, y = bh + 3, mh = h * 0.2;
+      g.fillStyle = "#2a2a2a"; g.fillRect(0, y, w, mh);
+      g.fillStyle = "#666"; g.fillRect(w / 2 - dpr / 2, y, dpr, mh);
+      const ok = Math.abs(ms) < 8;
+      g.fillStyle = ok ? "#8fd36f" : Math.abs(ms) < 25 ? "#ffd166" : "#ff5f56";
+      g.fillRect(w / 2 + off * w - 2 * dpr, y, 4 * dpr, mh);
+      g.textAlign = "right"; g.fillText((ms >= 0 ? "+" : "") + ms.toFixed(0) + " ms", w - 2, h - 2); g.textAlign = "left";
+    }
   }
   draw() {
     const time = this.el.querySelector("[data-time]");
     if (time) time.textContent = this.track ? `${fmtTime(this.pos)} / -${fmtTime(this.duration - this.pos)}` : "–";
+    this.drawPhase();
     if (!this.peaks) return;
     drawOverview(this.ovC, this.peaks.peaks, this.color, this.pos / this.duration, this.cues.map(c => c == null ? null : c / this.duration));
     // Scroll-Wellenform: ±3 s um die Abspielposition
@@ -247,7 +382,8 @@ class Deck {
     if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
     const g = c.getContext("2d"); g.clearRect(0, 0, w, h);
     const span = 6, ps = this.peaks.perSecond, start = this.pos - span / 2, mid = h / 2, pk = this.peaks.peaks;
-    if (this.loop) { const x0 = (this.loop.start - start) / span * w, x1 = (this.loop.end - start) / span * w; g.fillStyle = "rgba(143,211,111,.15)"; g.fillRect(x0, 0, x1 - x0, h); }
+    if (this.loop) { const x0 = (this.loop.start - start) / span * w, x1 = (this.loop.end - start) / span * w; g.fillStyle = "rgba(143,211,111,.18)"; g.fillRect(x0, 0, x1 - x0, h); g.fillStyle = "#8fd36f"; g.fillRect(x0, 0, 2 * dpr, h); g.fillRect(x1 - 2 * dpr, 0, 2 * dpr, h); }
+    else if (this.loopIn != null) { const x0 = (this.loopIn - start) / span * w; g.fillStyle = "#8fd36f"; g.fillRect(x0, 0, 2 * dpr, h); }
     for (let x = 0; x < w; x += 2) {
       const tsec = start + x / w * span, idx = Math.floor(tsec * ps);
       if (idx < 0 || idx >= pk.length) continue;
@@ -257,7 +393,7 @@ class Deck {
     if (this.bpm) {
       const period = 60 / this.bpm; let b = Math.ceil((start - this.grid) / period);
       for (let t = this.grid + b * period; t < start + span; t += period, b++) {
-        const x = (t - start) / span * w; g.fillStyle = b % 4 === 0 ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.18)"; g.fillRect(x, 0, 1, h);
+        const x = (t - start) / span * w; const bar = ((b % 4) + 4) % 4 === 0; g.fillStyle = bar ? "rgba(255,80,80,.8)" : "rgba(255,255,255,.22)"; g.fillRect(x, 0, bar ? 2 * dpr : dpr, h);
       }
     }
     this.cues.forEach((cu, i) => { if (cu == null) return; const x = (cu - start) / span * w; if (x < 0 || x > w) return; g.fillStyle = "#ff5f56"; g.fillRect(x, 0, 2 * dpr, h); g.font = `${10 * dpr}px sans-serif`; g.fillText(i + 1, x + 3, 11 * dpr); });
@@ -400,10 +536,12 @@ function handleEvent(ev) {
     case "cue": ev.value ? d.cuePress() : d.cueRelease(); break;
     case "sync": if (ev.value) d.sync(); break;
     case "headCue": if (ev.value) togglePfl(ev.deck); break;
-    case "loopIn": if (ev.value) d.loopInPress(); break;
+    case "loopIn": if (ev.value) DJ.shift[ev.deck] ? d.autoLoop() : d.loopInPress(); break;
+    case "loopHalve": if (ev.value) d.loopHalve(); break;
+    case "loopDouble": if (ev.value) d.loopDouble(); break;
     case "loopOut": if (ev.value) d.loopOutPress(); break;
     case "reloop": if (ev.value) d.reloop(); break;
-    case "tempoRange": if (ev.value) d.cycleRange(); break;
+    case "tempoRange": if (ev.value) DJ.shift[ev.deck] ? d.toggleKeylock() : d.cycleRange(); break;
     case "jogTouch": d.jogTouch(!!ev.value); break;
     case "jogScratch": d.jogTurn(ev.value); break;
     case "jogBend": d.touch ? d.jogTurn(ev.value) : d.bend(DJL.clamp(ev.value * 0.004, -0.3, 0.3)); break;
@@ -437,24 +575,81 @@ function handleEvent(ev) {
 }
 
 // --------------------------------------------------------------- Tastatur
+function keyAction(ev, down) {
+  const d = ev.deck != null ? DJ.decks[ev.deck] : null;
+  if (!down) {   // Loslassen: nur Cue und Nudge reagieren
+    if (ev.action === "cue") d.cueRelease();
+    if (ev.action === "nudge") d.nudge(0, false);
+    return;
+  }
+  switch (ev.action) {
+    case "play": d.setPlay(!d.playing); break;
+    case "cue": d.cuePress(); break;
+    case "sync": d.sync(); break;
+    case "nudge": d.nudge(ev.dir, true); break;
+    case "beatjump": d.beatjump(ev.beats); break;
+    case "pitchStep": d.pitchStep(ev.step); break;
+    case "loopIn": d.loopInPress(); break;
+    case "loopOut": d.loopOutPress(); break;
+    case "reloop": d.reloop(); break;
+    case "autoLoop": d.autoLoop(); break;
+    case "loopHalve": d.loopHalve(); break;
+    case "loopDouble": d.loopDouble(); break;
+    case "loopMove": d.loopMove(ev.dir); break;
+    case "keylock": d.toggleKeylock(); break;
+    case "gridHere": d.gridHere(); break;
+    case "tap": d.tap(); break;
+    case "hotcue": d.hotcue(ev.index, !!ev.clear); break;
+    case "browse": browse(ev.dir); break;
+    case "load": loadSelected(ev.deck); break;
+    case "xfader": DJ.xfader = ev.dir === 0 ? 0.5 : DJL.clamp(DJ.xfader + ev.dir * 0.1, 0, 1); applyCrossfader(); break;
+    case "help": toggleKeyHelp(); break;
+  }
+}
+const heldKeys = new Map();
 document.addEventListener("keydown", e => {
-  if (!$("#view-dj").classList.contains("active") || e.target.matches("input, textarea, select") || e.repeat) return;
-  const k = e.key.toLowerCase(), A = DJ.decks[0], B = DJ.decks[1];
-  const map = {
-    q: () => A.setPlay(!A.playing), w: () => A.cuePress(), e: () => A.sync(),
-    p: () => B.setPlay(!B.playing), o: () => B.cuePress(), i: () => B.sync(),
-    arrowdown: () => browse(1), arrowup: () => browse(-1),
-    arrowleft: () => loadSelected(0), arrowright: () => loadSelected(1),
-  };
-  "1234".split("").forEach((n, j) => map[n] = () => A.hotcue(j, e.shiftKey));
-  "7890".split("").forEach((n, j) => map[n] = () => B.hotcue(j, e.shiftKey));
-  if (map[k]) { e.preventDefault(); djInitAudio(); map[k](); }
+  if (!$("#view-dj").classList.contains("active") || e.target.matches("input, textarea, select") || e.metaKey || e.ctrlKey) return;
+  const ev = DJL.keyEvent(e.code, { shift: e.shiftKey, alt: e.altKey });
+  if (!ev) return;
+  e.preventDefault();
+  const repeatable = ["pitchStep", "browse", "xfader"].includes(ev.action);
+  if (e.repeat && !repeatable) return;
+  heldKeys.set(e.code, ev);
+  djInitAudio(); keyAction(ev, true);
 });
 document.addEventListener("keyup", e => {
-  if (!$("#view-dj").classList.contains("active")) return;
-  if (e.key.toLowerCase() === "w") DJ.decks[0].cueRelease();
-  if (e.key.toLowerCase() === "o") DJ.decks[1].cueRelease();
+  const ev = heldKeys.get(e.code); if (!ev) return;
+  heldKeys.delete(e.code); keyAction(ev, false);
 });
+addEventListener("blur", () => { heldKeys.forEach(ev => keyAction(ev, false)); heldKeys.clear(); });
+
+function toggleKeyHelp() {
+  let el = $("#keyhelp");
+  if (el) { el.remove(); return; }
+  const K = DJL.KEYMAP, row = (code, txt) => `<tr><td><kbd>${K[code].label}</kbd></td><td>${txt}</td></tr>`;
+  const deck = (c) => `
+    ${row(c.play, "Play/Pause")}${row(c.cue, "Cue (halten = vorhören)")}${row(c.sync, "Sync an/aus")}
+    ${row(c.nm, "Bremsen (halten) · Shift: 4 Beats zurück · Alt: Tempo −0,05 %")}${row(c.np, "Schieben (halten) · Shift: 4 Beats vor · Alt: Tempo +0,05 %")}
+    ${row(c.li, "Loop In · Shift: Loop zurückschieben")}${row(c.lo, "Loop Out · Shift: Loop vorschieben")}${row(c.rl, "Reloop/Exit")}
+    ${row(c.al, "Auto-Loop (Länge mit ½X/2X)")}${row(c.lh, "Loop ½X")}${row(c.ld, "Loop 2X")}
+    ${row(c.mt, "Master Tempo · Shift: Beatgrid-Beat hier")}${row(c.tap, "Tap-Tempo (ab 4 Taps)")}
+    <tr><td><kbd>${c.hc}</kbd></td><td>Hot Cues 1–4 · Shift: löschen</td></tr>`;
+  el = document.createElement("div"); el.id = "keyhelp"; el.className = "keyhelp";
+  el.innerHTML = `<div class="kh-box"><header>Tastatur <button class="btn small" id="kh-x">✕</button></header>
+    <div class="kh-cols">
+      <table><caption>Deck A</caption>${deck({ play: "KeyQ", cue: "KeyW", sync: "KeyE", nm: "KeyR", np: "KeyT", li: "KeyA", lo: "KeyS", rl: "KeyD", al: "KeyF", lh: "KeyX", ld: "KeyC", mt: "KeyG", tap: "KeyV", hc: "1 2 3 4" })}</table>
+      <table><caption>Deck B</caption>${deck({ play: "KeyP", cue: "KeyO", sync: "KeyI", nm: "KeyY", np: "KeyU", li: "KeyK", lo: "KeyL", rl: "Semicolon", al: "KeyJ", lh: "KeyM", ld: "Comma", mt: "KeyH", tap: "KeyN", hc: "7 8 9 0" })}</table>
+      <table><caption>Allgemein</caption>
+        <tr><td><kbd>↑ ↓</kbd></td><td>Bibliothek blättern</td></tr>
+        <tr><td><kbd>← →</kbd></td><td>Auf Deck A / B laden</td></tr>
+        <tr><td><kbd>Shift ← →</kbd></td><td>Crossfader schieben</td></tr>
+        <tr><td><kbd>B</kbd></td><td>Crossfader Mitte</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Diese Hilfe</td></tr>
+      </table>
+    </div></div>`;
+  document.body.appendChild(el);
+  el.onclick = e => { if (e.target === el || e.target.id === "kh-x") el.remove(); };
+}
 
 // --------------------------------------------------------------- Animation
 function frame() {
@@ -477,5 +672,11 @@ const startBtn = document.createElement("button");
 startBtn.id = "dj-start"; startBtn.className = "btn primary"; startBtn.textContent = "Audio starten";
 startBtn.onclick = () => djInitAudio().then(listOutputs);
 $("#view-dj .listhead").prepend(startBtn);
+const qBtn = document.createElement("button");
+qBtn.className = "btn small on"; qBtn.textContent = "QUANTIZE"; qBtn.title = "Loops, Hot Cues und Loop-Punkte rasten auf den Beat ein";
+qBtn.onclick = () => { DJ.quantize = !DJ.quantize; qBtn.classList.toggle("on", DJ.quantize); };
+const kBtn = document.createElement("button");
+kBtn.className = "btn small"; kBtn.textContent = "⌨ Tasten"; kBtn.onclick = toggleKeyHelp;
+$("#midi-status").after(qBtn, kBtn);
 views.dj = { onShow: () => { loadLibrary(); initMidi(); listOutputs(); } };
 requestAnimationFrame(frame);
