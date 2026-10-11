@@ -10,6 +10,8 @@
     0x0B: "play", 0x0C: "cue", 0x36: "jogTouch", 0x67: "jogTouch", 0x58: "sync", 0x54: "headCue",
     0x10: "loopIn", 0x11: "loopOut", 0x4D: "reloop", 0x3F: "shift", 0x60: "tempoRange",
     0x48: "playShift", 0x0E: "cueShift",
+    // CUE/LOOP CALL ◀ ▶ – bei aktivem Loop halbieren/verdoppeln (wie DDJ-400/rekordbox)
+    0x51: "loopHalve", 0x53: "loopDouble",
     0x1B: "padMode:hotcue", 0x1E: "padMode:beatloop", 0x20: "padMode:beatjump", 0x22: "padMode:sampler",
   };
   const CC_ACTIONS = {
