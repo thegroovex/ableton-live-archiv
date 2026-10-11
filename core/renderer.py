@@ -89,7 +89,12 @@ def _dismiss_save_dialog() -> str:
             set {{ww, wh}} to size of w
             -- Größen in Punkten (Retina: halbe Pixel). Lives Sichern-Dialog ist ca. 330 x 100 pt.
             -- Plug-in-Fenster heißen "1-Serum/…" und werden über den Bindestrich ausgeschlossen.
-            if t does not contain "-" and t does not contain "/" and ww > 220 and ww < 720 and wh > 60 and wh < 260 then
+            set sr to ""
+            try
+                set sr to subrole of w
+            end try
+            -- Gemessen auf MacBook Pro: Dialog 504 x 149 pt, Subrolle AXDialog, ohne Titel.
+            if sr is "AXDialog" or (t does not contain "-" and t does not contain "/" and ww > 220 and ww < 720 and wh > 60 and wh < 260) then
                 set frontmost to true
                 delay 0.2
                 click at {{(wx + ww * 0.15) as integer, (wy + wh * 0.8) as integer}}
