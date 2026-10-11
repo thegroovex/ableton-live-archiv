@@ -91,7 +91,8 @@ def job_scan(roots):
     for r in roots:
         if not os.path.isdir(clean_path(r)):
             JOB.write(f"Ordner nicht gefunden: {clean_path(r)}")
-    paths = find_sets(roots)
+    hidden = db.hidden_paths()
+    paths = [p for p in find_sets(roots) if p not in hidden]
     JOB.total = len(paths)
     JOB.write(f"{len(paths)} Live-Sets gefunden.")
     known = {r["path"] for r in db.db().execute("SELECT path FROM projects")}
@@ -212,6 +213,18 @@ def api_projects():
 def api_project(pid):
     p = db.get(pid)
     return jsonify(p) if p else abort(404)
+
+
+@app.delete("/api/projects/<int:pid>")
+def api_remove(pid):
+    if JOB.running:
+        return jsonify(error="Bitte warten, bis der laufende Vorgang fertig ist."), 409
+    return jsonify(ok=db.remove_project(pid))
+
+
+@app.post("/api/hidden/clear")
+def api_unhide():
+    return jsonify(restored=db.unhide_all())
 
 
 @app.patch("/api/projects/<int:pid>")
