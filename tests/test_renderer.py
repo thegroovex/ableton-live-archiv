@@ -1,0 +1,59 @@
+import os
+import subprocess
+import sys
+
+import pytest
+
+from core import renderer
+
+
+def test_render_flow_with_mocked_live(tmp_path, monkeypatch):
+    calls = []
+    out = tmp_path / "renders"
+
+    def fake_run(cmd, **kw):
+        calls.append(cmd)
+        class R: returncode = 0; stdout = ""; stderr = ""
+        if cmd[0] == "osascript" and "keystroke \"r\"" in cmd[2]:
+            (out / "00001_Song.mp3").write_bytes(b"ID3" + b"0" * 2048)  # Live "exportiert"
+        return R()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+    monkeypatch.setattr(renderer, "_front_window_title", lambda: "Song  - Ableton Live 12 Suite")
+    monkeypatch.setattr(renderer.time, "sleep", lambda s: None)
+    res = renderer.render_set("/x/Song Project/Song.als", str(out), "00001_Song", app_name="Ableton Live 12 Suite", log=lambda m: None)
+    assert res == str(out / "00001_Song.mp3") and os.path.getsize(res) > 2000
+    assert calls[0] == ["open", "-a", "Ableton Live 12 Suite", "/x/Song Project/Song.als"]
+    script = [c for c in calls if c[0] == "osascript" and "keystroke \"r\"" in c[2]][0][2]
+    assert "command down, shift down" in script and str(out) in script and "00001_Song" in script
+
+
+def test_load_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(renderer.subprocess, "run", lambda *a, **k: type("R", (), {"returncode": 0, "stdout": "", "stderr": ""})())
+    monkeypatch.setattr(renderer, "_front_window_title", lambda: "Anderes Set")
+    monkeypatch.setattr(renderer.time, "sleep", lambda s: None)
+    with pytest.raises(TimeoutError):
+        renderer.render_set("/x/Song.als", str(tmp_path), "n", load_timeout=0.05, log=lambda m: None)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="nur auf macOS")
+def test_macos_tools_available():
+    """Auf dem Mac müssen osascript und open vorhanden sein und AppleScript ausführbar."""
+    r = subprocess.run(["osascript", "-e", "return 1 + 1"], capture_output=True, text=True)
+    assert r.returncode == 0 and r.stdout.strip() == "2"
+    assert subprocess.run(["which", "open"], capture_output=True).returncode == 0
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="nur auf macOS")
+def test_apple_script_compiles():
+    """Das Export-Skript muss für AppleScript syntaktisch gültig sein (ohne es auszuführen)."""
+    import inspect, re, tempfile
+    src = inspect.getsource(renderer.render_set)
+    body = re.search(r"script = f'''(.*?)'''", src, re.S).group(1)
+    body = body.replace("{{", "{").replace("}}", "}")
+    body = body.replace("{app_name}", "Finder").replace("{LIVE_PROCESS}", "Finder").replace("{esc_name}", "x").replace("{esc_dir}", "/tmp")
+    with tempfile.NamedTemporaryFile("w", suffix=".applescript", delete=False) as fh:
+        fh.write(body)
+    out = fh.name + ".scpt"
+    r = subprocess.run(["osacompile", "-o", out, fh.name], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
