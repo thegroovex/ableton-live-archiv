@@ -89,10 +89,8 @@ function drawMini(c, id) {
   for (let i = 0; i < n; i++) {
     const lo = d.low[i], mi = d.mid[i], hi = d.high[i];
     // Farbe mischen: Bass = Blau, Mitten = Orange, Höhen = Weiß
-    let r = 30 * lo + 255 * mi + 255 * hi, gg = 110 * lo + 150 * mi + 255 * hi, b = 255 * lo + 40 * mi + 255 * hi;
     const played = prog >= 0 && i / n <= prog;
-    const a = played ? 0.45 : 1;
-    g.fillStyle = `rgba(${r | 0},${gg | 0},${b | 0},${a})`;
+    g.fillStyle = Wave.bandColor(lo, mi, hi, played ? 0.45 : 1);
     const h = Math.max(1, d.amp[i] * (H - 2));
     g.fillRect(i * bw, mid - h / 2, Math.max(1, bw - 0.4), h);
   }
@@ -203,7 +201,7 @@ async function loadDetailWave(id) {
 function drawDetailWave() {
   const c = $("#dwave"), pk = A.peaks[A.sel]; if (!c || !pk) return;
   const prog = A.playing === A.sel && A.audio.duration ? A.audio.currentTime / A.audio.duration : null;
-  drawOverview(c, pk.peaks, "#ffa940", prog);
+  drawOverview(c, pk.peaks, "#ffa940", prog, [], pk);
 }
 
 // Kopfzeilen-Aktionen
