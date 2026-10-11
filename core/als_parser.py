@@ -104,7 +104,9 @@ def parse_set(path: str) -> SetInfo:
         is_default = root_note in ("0", None) and (name or "Major").lower() == "major"
         # Live speichert immer eine Skala (Standard C-Dur). Nur werten, wenn "Scale" aktiv ist
         # oder bewusst etwas anderes als der Standard eingestellt wurde.
-        usable = in_key == "true" or (in_key is None and not is_default)
+        # C-Dur ist Lives Voreinstellung und in fast jedem Set gespeichert, auch wenn nie gewählt.
+        # Darum zählt sie nicht als Tonart; die Audioanalyse ermittelt sie dann aus dem MP3.
+        usable = not is_default and in_key != "false"
         if root_note is not None and root_note.isdigit() and usable:
             info.key_root = NOTE_NAMES[int(root_note) % 12]
             info.scale_name = name
