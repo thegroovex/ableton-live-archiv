@@ -76,6 +76,17 @@
     "Hot Cues 7–0 · Shift: löschen": "Hot cues 7–0 · Shift: delete", "Bibliothek blättern": "Browse library",
     "Auf Deck A / B laden": "Load onto deck A / B", "Crossfader schieben": "Move crossfader", "Crossfader Mitte": "Center crossfader",
     "Diese Hilfe": "This help", "Höhe der Decks": "Deck height", "Breite der Crates": "Crate width", "Layout zurückgesetzt": "Layout reset",
+    "Übergeordneter Ordner": "Parent folder", "Pfad eingeben und Enter drücken": "Type a path and press Enter",
+    "Diesen Ordner importieren": "Import this folder", "Tags bearbeiten": "Edit tags", "Auch in die Audiodatei schreiben (Titel, Artist, Genre, BPM, Tonart)": "Also write to the audio file (title, artist, genre, BPM, key)",
+    "Tags der markierten Tracks bearbeiten (⌘I)": "Edit tags of the selected tracks (⌘I)", "BPM, Tonart, Genre und Stimmung bestimmen": "Detect BPM, key, genre and mood",
+    "✎ Tags": "✎ Tags", "Tags bearbeiten (⌘I)": "Edit tags (⌘I)", "Dieser Ordner ist leer.": "This folder is empty.", "Kein Zugriff auf diesen Ordner.": "No access to this folder.",
+    "Keine Audiodateien direkt in diesem Ordner – Unterordner werden mit eingelesen.": "No audio files directly in this folder – subfolders are included.",
+    "Markierte Tracks": "Selected tracks", "Alle noch nicht analysierten": "All not yet analyzed", "Ganze Bibliothek neu": "Whole library again",
+    "Nichts zu analysieren": "Nothing to analyze", "Erst einen Track markieren": "Select a track first", "‹verschieden›": "‹mixed›",
+    "Live-Renderings: Titel und Werte landen im Archiv (gleiche Daten wie im Archiv-Tab).": "Live renders: title and values are stored in the archive (same data as the Archive tab).",
+    "Leere Felder mit ‹verschieden› bleiben bei jedem Track, wie sie sind.": "Empty fields marked ‹mixed› stay as they are for each track.",
+    "Tags gespeichert": "Tags saved", "Benutzerordner": "Home", "Musik": "Music", "Schreibtisch": "Desktop", "Dokumente": "Documents",
+    "Format nicht unterstützt": "Format not supported",
     "Tastatur": "Keyboard", "Taste": "Key", "Funktion": "Function", "Schließen": "Close",
     // Server
     "Abgebrochen.": "Cancelled.", "Warte auf letzte Analysen …": "Waiting for last analyses …", "Rendern abgeschlossen.": "Rendering finished.",
@@ -126,6 +137,12 @@
     [/Export-Dialog ging nicht auf, neuer Versuch \((\d)\/3\) …/, "Export dialog did not open, retrying ($1/3) …"],
     [/Live hat kein MP3 erzeugt und ffmpeg fehlt\. Aktiviere 'MP3 kodieren' im Export-Dialog oder installiere ffmpeg \((.+)\)\./, "Live did not create an MP3 and ffmpeg is missing. Enable 'Encode MP3' in the export dialog or install ffmpeg ($1)."],
     [/^Fehler: /, "Error: "],
+    [/^(\d+) Audiodateien in diesem Ordner, davon (\d+) schon importiert – Unterordner werden mit eingelesen\.$/, "$1 audio files in this folder, $2 already imported – subfolders are included."],
+    [/^(\d+) Audiodateien in diesem Ordner – Unterordner werden mit eingelesen\.$/, "$1 audio files in this folder – subfolders are included."],
+    [/^Tags bearbeiten · (\d+) Tracks$/, "Edit tags · $1 tracks"], [/^Tags bearbeiten · /, "Edit tags · "],
+    [/^Alle (\d+) Tracks neu analysieren\? Von dir geänderte Werte bleiben erhalten\.$/, "Re-analyze all $1 tracks? Values you changed are kept."],
+    [/^Analyse gestartet: (\d+) Tracks$/, "Analysis started: $1 tracks"], [/^Gespeichert, (\d+) Datei\(en\) aktualisiert$/, "Saved, $1 file(s) updated"],
+    [/^Nicht in die Datei geschrieben:/, "Not written to file:"], [/^Laufwerk ([A-Z]):$/, "Drive $1:"],
   ];
 
   // Plattform: Windows-Begriffe in beiden Sprachen
