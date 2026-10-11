@@ -12,12 +12,9 @@ RENDER_DIR = os.path.join(HOME, "renders")
 PEAKS_DIR = os.path.join(HOME, "peaks")
 SETTINGS_PATH = os.path.join(HOME, "settings.json")
 
-DEFAULT_SETTINGS = {
-    "roots": ["~/Music/Ableton"],
-    "live_app": "Ableton Live 12 Suite",
-    "template": "",
-    "new_project_dir": "~/Music/Ableton/Projects",
-}
+from core.platform_util import default_settings as _defaults
+
+DEFAULT_SETTINGS = {**_defaults(), "lang": ""}
 
 COLUMNS = {
     "path": "TEXT UNIQUE", "name": "TEXT", "folder": "TEXT", "mtime": "REAL", "size": "INTEGER",
@@ -165,7 +162,7 @@ def facets() -> dict:
 def load_settings() -> dict:
     s = dict(DEFAULT_SETTINGS)
     if os.path.exists(SETTINGS_PATH):
-        with open(SETTINGS_PATH) as fh:
+        with open(SETTINGS_PATH, encoding="utf-8") as fh:
             s.update(json.load(fh))
     return s
 
@@ -180,7 +177,7 @@ def save_settings(s: dict) -> dict:
         if isinstance(cur.get(k), str) and cur[k].strip():
             cur[k] = clean_path(cur[k])
     os.makedirs(HOME, exist_ok=True)
-    with open(SETTINGS_PATH, "w") as fh:
+    with open(SETTINGS_PATH, "w", encoding="utf-8") as fh:
         json.dump(cur, fh, indent=2, ensure_ascii=False)
     return cur
 
