@@ -291,7 +291,7 @@ class Deck {
   render() {
     const t = this.track, L = "AB"[this.i];
     this.el.innerHTML = `
-      <div class="title"><span class="letter">${L}</span><b>${esc(t ? t.title : "Kein Track geladen")}</b><span class="timeinfo" data-time>–</span></div>
+      <div class="title"><span class="letter">${L}</span><b ${t ? "data-noi18n" : ""}>${esc(t ? t.title : "Kein Track geladen")}</b><span class="timeinfo" data-time>–</span></div>
       <div class="meta"><span>${esc(t?.artist || "")}</span><span>${t ? keyLabel(t.key_root, t.key_mode) + " " + camelot(t.key_root, t.key_mode) : ""}</span><span>${esc(t?.genre || "")}</span></div>
       <div class="bpmrow">
         <div class="bigbpm" data-bpm>–<small>BPM</small></div>
@@ -550,7 +550,7 @@ function renderLibrary() {
     const cls = [i === DJ.sel ? "cursor" : "", DJ.selUids.has(t.uid) || (i === DJ.sel && !DJ.selUids.size) ? "sel" : "", loaded.has(t.uid) ? "loaded" : ""].join(" ");
     return `<tr data-i="${i}" data-uid="${t.uid}" class="${cls}" draggable="true">
       <td class="mono num">${pl ? i + 1 : ""}</td>
-      <td>${esc(t.title)}</td><td class="wcol"><canvas class="mini" data-djmini="${t.uid}" width="320" height="44" title="Klick: auf das freie Deck laden"></canvas></td><td>${esc(t.artist)}</td><td class="mono">${t.bpm ? (+t.bpm).toFixed(1) : "–"}</td>
+      <td data-noi18n>${esc(t.title)}</td><td class="wcol"><canvas class="mini" data-djmini="${t.uid}" width="320" height="44" title="Klick: auf das freie Deck laden"></canvas></td><td data-noi18n>${esc(t.artist)}</td><td class="mono">${t.bpm ? (+t.bpm).toFixed(1) : "–"}</td>
       <td class="mono">${keyLabel(t.key_root, t.key_mode)}</td><td class="mono" style="${fit ? "color:var(--green)" : ""}">${cam}${fit ? " ●" : ""}</td>
       <td>${esc(t.genre || "")}</td><td class="mono">${fmtTime(t.duration)}</td><td><span class="badge">${t.source}</span></td>
       <td class="acts"><button class="btn small" data-load="0">A</button> <button class="btn small" data-load="1">B</button> <button class="btn small" data-addpl title="Zu Playlist hinzufügen">＋</button>${pl ? ` <button class="btn small" data-rm title="Aus Playlist entfernen (Entf)">✕</button>` : ""}</td></tr>`;
