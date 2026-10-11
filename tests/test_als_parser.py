@@ -84,3 +84,18 @@ def test_clean_path_handles_copied_paths(tmp_path, make_set):
     assert clean_path("file://" + str(tmp_path) + "/Own%20Tracks/") == str(d)
     assert clean_path('"' + str(d) + '"') == str(d)
     assert len(find_sets([str(tmp_path) + "/Own%20Tracks"])) == 1
+
+
+def test_default_c_major_without_inkey_is_ignored(tmp_path):
+    """Live speichert immer C-Dur als Standard. Ohne aktive Skala darf das nicht als Tonart gelten."""
+    xml = ('<?xml version="1.0"?><Ableton Creator="Ableton Live 12.1"><LiveSet>'
+           '<ScaleInformation><Root Value="0"/><Name Value="Major"/></ScaleInformation>'
+           '<Tracks/></LiveSet></Ableton>')
+    p = tmp_path / "d.als"
+    with gzip.open(p, "wb") as fh:
+        fh.write(xml.encode())
+    assert parse_set(str(p)).key_root is None
+    xml2 = xml.replace('Root Value="0"', 'Root Value="9"').replace('"Major"', '"Minor"')
+    with gzip.open(p, "wb") as fh:
+        fh.write(xml2.encode())
+    assert parse_set(str(p)).key_root == "A"
