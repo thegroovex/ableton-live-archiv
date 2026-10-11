@@ -1,8 +1,12 @@
-name: Tests (macOS)
+name: Tests
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]   # macOS ist führend, Windows läuft parallel
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -10,9 +14,11 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - run: pip install -r requirements.txt pytest
-      - name: Python-Tests (Parser, Datenbank, API, Audio-Analyse, AppleScript)
+      - name: Python-Tests (Parser, Datenbank, API, Audio-Analyse, Renderer je System)
         run: python -m pytest -v
-      - name: JavaScript-Tests (FLX4-Mapping, DJ-Logik, Audio-Engine)
+      - name: JavaScript-Tests (FLX4-Mapping, DJ-Logik, Audio-Engine, Übersetzung)
+        shell: bash
         run: node --test tests/js/*.test.js
       - name: Syntax-Check Frontend
+        shell: bash
         run: for f in static/js/*.js; do node --check "$f"; done
