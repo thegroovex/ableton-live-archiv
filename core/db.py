@@ -9,6 +9,7 @@ import threading
 HOME = os.path.expanduser(os.environ.get("LIVE_ARCHIV_HOME", "~/LiveArchiv"))
 DB_PATH = os.path.join(HOME, "archiv.db")
 RENDER_DIR = os.path.join(HOME, "renders")
+PEAKS_DIR = os.path.join(HOME, "peaks")
 SETTINGS_PATH = os.path.join(HOME, "settings.json")
 
 DEFAULT_SETTINGS = {
