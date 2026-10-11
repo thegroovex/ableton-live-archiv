@@ -69,6 +69,41 @@ def _raise_set_window(set_name: str) -> None:
         pass
 
 
+def _window_count() -> int:
+    try:
+        return int(_osa(f'tell application "System Events" to tell process "{LIVE_PROCESS}" to count windows', timeout=10) or 0)
+    except Exception:
+        return 0
+
+
+def _live_cpu() -> float:
+    try:
+        out = subprocess.run(["ps", "-A", "-o", "%cpu=,comm="], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return 0.0
+    total = 0.0
+    for line in out.splitlines():
+        parts = line.strip().split(None, 1)
+        if len(parts) == 2 and parts[1].endswith("/Live"):
+            try:
+                total += float(parts[0].replace(",", "."))
+            except ValueError:
+                pass
+    return total
+
+
+def _wait_until_idle(log=print, max_wait: int = 45) -> None:
+    """Wartet, bis Live mit Plug-ins und Samples fertig ist (CPU zweimal hintereinander ruhig)."""
+    time.sleep(3)
+    calm, t0 = 0, time.time()
+    while time.time() - t0 < max_wait:
+        calm = calm + 1 if _live_cpu() < 60 else 0
+        if calm >= 2:
+            return
+        time.sleep(1.5)
+    log("Live ist noch beschäftigt, versuche den Export trotzdem …")
+
+
 def _front_document() -> str:
     """Datei-URL des vorderen Live-Fensters (AXDocument), falls macOS sie liefert."""
     try:
@@ -186,6 +221,26 @@ def _clear_crash_markers() -> None:
                 pass
 
 
+def _try_switch_with_dialog(als_path: str, app_name: str, log=print) -> bool:
+    """Öffnet das nächste Set im laufenden Live. True, wenn kein Dialog hängen bleibt."""
+    try:
+        open_in_live(als_path, app_name)
+    except Exception:
+        return False
+    for _ in range(8):  # bis zu ~4 s auf die Frage warten
+        time.sleep(0.5)
+        if _find_save_dialog():
+            break
+    else:
+        return True  # keine Frage, Live lädt schon
+    for _ in range(2):
+        if _dismiss_save_dialog() == "clicked":
+            return True
+        time.sleep(0.7)
+    log("Live-Dialog ließ sich nicht wegklicken, starte Live neu …")
+    return False
+
+
 def quit_live_hard(log=print) -> None:
     """Beendet Live ohne Rückfrage. Nur für Sets, die Live Archiv selbst geöffnet hat
     (Rendern startet nur bei geschlossenem Live), deshalb geht nichts verloren."""
@@ -219,8 +274,10 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
 
     if not os.path.isfile(als_path):
         raise FileNotFoundError(f"Datei nicht gefunden: {als_path}. Übersprungen, bitte neu scannen.")
-    # Live vor jedem Set frisch starten: so gibt es nie "Save changes …?" und kein Untitled dazwischen.
-    quit_live_hard(log)
+    # Schneller Weg: Live offen lassen und die Frage "Save changes …?" per Mausklick beantworten.
+    # Klappt das nicht, wird Live hart beendet und frisch mit dem Set gestartet.
+    if live_is_running() and not _try_switch_with_dialog(als_path, app_name, log):
+        quit_live_hard(log)
     # Heißt das Set wie das, was Live schon zeigt (z. B. "Untitled"), reicht der Fenstertitel nicht:
     # dann zählt die Datei hinter dem Fenster, oder mindestens ein Titelwechsel bzw. 15 s Ladezeit.
     ambiguous = _title_is(set_name, _front_window_title())
@@ -261,19 +318,33 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
         time.sleep(1.5)
     else:
         raise TimeoutError(f"Set wurde nicht geladen, Live zeigt „{title}“. Übersprungen.")
-    time.sleep(4)  # Plug-ins/Samples fertig laden lassen
+    _wait_until_idle(log)
 
-    _raise_set_window(set_name)
-    time.sleep(0.5)
     log("Export-Dialog …")
     esc_dir = out_dir.replace('"', '\\"')
     esc_name = out_name.replace('"', '\\"')
+    opened = False
+    for attempt in range(3):  # Live schluckt den Befehl gern, solange es noch Plug-ins lädt
+        _raise_set_window(set_name)
+        before = _window_count()
+        _osa(f'''
+        tell application "{app_name}" to activate
+        delay 0.6
+        tell application "System Events" to tell process "{LIVE_PROCESS}" to keystroke "r" using {{command down, shift down}}''', timeout=20)
+        for _ in range(12):
+            time.sleep(0.5)
+            if _window_count() > before:
+                opened = True
+                break
+        if opened:
+            break
+        log(f"Export-Dialog ging nicht auf, neuer Versuch ({attempt + 2}/3) …")
+        time.sleep(3)
+    if not opened:
+        raise TimeoutError("Live hat den Export-Dialog nicht geöffnet. Übersprungen.")
     script = f'''
-    tell application "{app_name}" to activate
-    delay 0.6
     tell application "System Events" to tell process "{LIVE_PROCESS}"
-        keystroke "r" using {{command down, shift down}}
-        delay 1.5
+        delay 0.5
         key code 36 -- Enter: Export im Live-Dialog bestätigen
         delay 1.5
         keystroke "a" using {{command down}}
