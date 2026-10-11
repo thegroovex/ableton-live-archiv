@@ -156,7 +156,13 @@ $$("#sidebar .item[data-f]").forEach(i => i.onclick = () => {
   refresh();
 });
 $("#btn-reset").onclick = () => { A.filters = {}; $("#q").value = $("#tmin").value = $("#tmax").value = ""; $$("#sidebar .item[data-f]").forEach((x, i) => x.classList.toggle("sel", i === 0)); refresh(); };
-$("#btn-scan").onclick = () => api("/api/scan", { method: "POST", body: {} });
+$("#btn-scan").onclick = async () => {
+  $("#job-text").textContent = "Suche .als-Dateien …";
+  $("#job-bar").style.width = "3%"; $("#job-bar").classList.add("indeterminate");
+  jobWasRunning = true;
+  await api("/api/scan", { method: "POST", body: {} });
+  pollNow();
+};
 $("#btn-render-missing").onclick = async () => {
   const n = +$("#n-nomp3").textContent;
   if (!n) return alert("Alle Projekte haben schon ein MP3.");
