@@ -462,7 +462,6 @@ def main():
     print(f"Live Archiv läuft auf {url}  (Beenden mit Ctrl+C)")
     import logging
     logging.getLogger("werkzeug").setLevel(logging.WARNING)  # keine GET-Zeilen im Terminal
-    print(f"Live Archiv läuft auf http://127.0.0.1:{port}  (Fenster offen lassen, Ctrl+C beendet)")
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
 
