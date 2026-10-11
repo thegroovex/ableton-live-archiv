@@ -274,3 +274,9 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; }
 .t-hint { color: var(--dim); font-size: 11px; padding-top: 0; }
 .t-hint:empty { display: none; }
 .rating .dim { color: var(--dim); }
+
+/* Tonhöhe: Repitch/Keep Pitch und Transposition */
+.ratebox .mtbtn { min-width: 86px; }
+.keybox { display: flex; gap: 2px; }
+.keybox .keyval { min-width: 86px; font-family: var(--mono); }
+.keybox .keyval.ksync { box-shadow: inset 0 0 0 1px var(--accent, #5ec8e0); }
