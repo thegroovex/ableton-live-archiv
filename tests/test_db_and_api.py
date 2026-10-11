@@ -148,3 +148,14 @@ def test_static_files_served(home):
         assert c.get(f"/static/js/{js}").status_code == 200
     assert c.get("/static/js/deck-worklet.js").status_code == 200
     assert c.get("/static/css/app.css").status_code == 200
+
+
+def test_remove_project_stays_hidden_after_rescan(home, tmp_path):
+    import app as appmod
+    from core import db
+    c = appmod.app.test_client()
+    pid = db.upsert({"path": "/x/Weg.als", "name": "Weg"})
+    assert c.delete(f"/api/projects/{pid}").get_json()["ok"]
+    assert db.get(pid) is None
+    assert "/x/Weg.als" in db.hidden_paths()
+    assert c.post("/api/hidden/clear").get_json()["restored"] == 1
