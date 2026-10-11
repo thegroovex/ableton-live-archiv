@@ -204,5 +204,15 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; }
 #view-dj.decks-sized .decks { height: var(--decks-h); grid-template-rows: minmax(0, 1fr); flex-shrink: 0; }
 #view-dj.decks-sized .deck { display: flex; flex-direction: column; overflow: hidden; }
 #view-dj.decks-sized .deck > * { flex-shrink: 0; }
-#view-dj.decks-sized canvas.zoom { flex: 1 1 90px; height: auto; min-height: 40px; }
 #view-dj.decks-sized .djlib { min-height: 80px; }
+
+/* DJ: Scroll-Wellenform mit Zoom und Ziehen */
+.zoomwrap { position: relative; }
+.zoomwrap canvas.zoom { cursor: grab; touch-action: none; }
+.zoomwrap canvas.zoom.dragging { cursor: grabbing; }
+.zoombtns { position: absolute; right: 4px; top: 4px; display: flex; align-items: center; gap: 3px; opacity: .55; transition: opacity .15s; }
+.zoomwrap:hover .zoombtns { opacity: 1; }
+.zoombtns .btn { padding: 0 6px; line-height: 16px; background: rgba(40,40,40,.85); }
+.zoomlbl { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 34px; text-align: center; }
+#view-dj.decks-sized .zoomwrap { flex: 1 1 90px; min-height: 40px; display: flex; }
+#view-dj.decks-sized .zoomwrap canvas.zoom { flex: 1; height: auto; min-height: 0; }
