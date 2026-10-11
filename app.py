@@ -19,7 +19,9 @@ from flask import Flask, jsonify, request, send_file, send_from_directory, abort
 from core import db
 from core.als_parser import parse_set, find_sets, set_tempo_and_key
 from core.classify import status_score
-from core import renderer
+from core import platform_util
+
+renderer = platform_util.renderer()
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, static_folder=os.path.join(APP_DIR, "static"), static_url_path="/static")
@@ -349,7 +351,7 @@ def api_open(pid):
 @app.post("/api/reveal/<int:pid>")
 def api_reveal(pid):
     p = db.get(pid) or abort(404)
-    subprocess.run(["open", "-R", p["path"]])
+    platform_util.reveal(p["path"])
     return jsonify(ok=True)
 
 
@@ -368,7 +370,7 @@ def api_create():
     """Neues Projekt aus Vorlage: Ordner anlegen, Tempo/Tonart setzen, Metadaten speichern, in Live öffnen."""
     b = request.json or {}
     s = db.load_settings()
-    name = re.sub(r'[/:\\]+', "-", (b.get("name") or "").strip())
+    name = re.sub(platform_util.INVALID_NAME_CHARS, "-", (b.get("name") or "").strip())
     if not name:
         return jsonify(error="Bitte einen Namen angeben."), 400
     template = os.path.expanduser(s.get("template") or "")
@@ -576,11 +578,7 @@ def api_grid(kind, iid):
 
 
 def open_browser(url):
-    """Chrome bevorzugt: nur Chrome/Edge können MIDI (FLX4) und Audio-Ausgänge wählen."""
-    for app_name in ("Google Chrome", "Microsoft Edge", "Brave Browser", "Arc"):
-        if os.path.exists(f"/Applications/{app_name}.app"):
-            subprocess.Popen(["open", "-a", app_name, url]); return
-    webbrowser.open(url)
+    platform_util.open_browser(url)
 
 
 def main():
