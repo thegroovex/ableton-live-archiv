@@ -427,10 +427,15 @@ def analyze_import(iid):
     a = analyze_audio(t["path"])
     if a.get("error"):
         JOB.write(a["error"]); return
+    try:
+        from core import peaks
+        peaks.cached(t["path"], db.PEAKS_DIR, f"i{iid}")
+    except Exception:
+        pass
     db.update_import(iid, dict(bpm=a["tempo_audio"], key_root=a["key_root"], key_mode=a["key_mode"],
                                duration=a["duration"], energy=a["energy"],  # Beatgrid erkennt der DJ-Tab genauer selbst
                                genre=guess_genre(a["tempo_audio"], a["energy"], a["onset_rate"]),
-                               analyzed_at=time.time()))
+                               mood=a.get("mood"), analyzed_at=time.time()))
 
 
 def job_import(paths):
@@ -455,6 +460,156 @@ def job_import(paths):
             JOB.write(f"{os.path.basename(f)}: {exc}")
         JOB.done += 1
     JOB.write("Import abgeschlossen.")
+
+
+def job_dj_analyze(uids):
+    JOB.total = len(uids)
+    for uid in uids:
+        if JOB.cancel:
+            break
+        try:
+            if uid[0] == "p":
+                _analyze(int(uid[1:]))
+            else:
+                t = db.get_import(int(uid[1:]))
+                if t:
+                    JOB.write(f"Analysiere {t['title'] or os.path.basename(t['path'])} …")
+                    analyze_import(int(uid[1:]))
+        except Exception as exc:
+            JOB.write(f"{uid}: {exc}")
+        JOB.done += 1
+    JOB.write("Analyse abgeschlossen.")
+
+
+@app.post("/api/dj/analyze")
+def api_dj_analyze():
+    """uids: bestimmte Tracks; mode="missing": alle noch nicht analysierten; mode="all": alle neu."""
+    b = request.json or {}
+    lib = db.dj_library()
+    if b.get("mode") == "missing":
+        uids = [t["uid"] for t in lib if not t["analyzed"]]
+    elif b.get("mode") == "all":
+        uids = [t["uid"] for t in lib]
+    else:
+        known = {t["uid"] for t in lib}
+        uids = [u for u in (b.get("uids") or []) if u in known]
+    if not uids:
+        return jsonify(started=False, count=0)
+    if JOB.running:
+        return jsonify(error="Bitte warten, bis der laufende Vorgang fertig ist."), 409
+    return jsonify(started=run_job("Analyse", job_dj_analyze, uids), count=len(uids))
+
+
+def _write_file_tags(path, v):
+    """Schreibt Titel, Artist, Genre, BPM und Tonart in die Audiodatei (ID3/Vorbis/MP4 über mutagen)."""
+    from mutagen import File as MFile
+    from mutagen.easyid3 import EasyID3
+    if "initialkey" not in EasyID3.valid_keys:
+        EasyID3.RegisterTextKey("initialkey", "TKEY")
+    m = MFile(path, easy=True)
+    if m is None:
+        raise ValueError("Format nicht unterstützt")
+    if m.tags is None:
+        m.add_tags()
+    key = None
+    if "key_root" in v:
+        key = (v["key_root"] or "") + ("m" if v.get("key_mode") == "Moll" and v["key_root"] else "")
+    pairs = {"title": v.get("title"), "artist": v.get("artist"), "genre": v.get("genre"),
+             "bpm": str(int(round(float(v["bpm"])))) if v.get("bpm") else None, "initialkey": key}
+    for k, val in pairs.items():
+        if val is None or (k not in v and not (k == "initialkey" and "key_root" in v)):
+            continue
+        try:
+            if val == "":
+                m.tags.pop(k, None)
+            else:
+                m.tags[k] = [val]
+        except Exception:
+            pass  # Feld gibt es in diesem Format nicht
+    m.save()
+
+
+@app.patch("/api/dj/tags")
+def api_dj_tags():
+    """Tag-Editor: Werte für einen oder mehrere Tracks setzen. Nur übergebene Felder ändern sich."""
+    b = request.json or {}
+    raw = b.get("values") or {}
+    allowed = {"title", "artist", "bpm", "key_root", "key_mode", "genre", "mood", "tags", "notes", "rating"}
+    v = {k: raw[k] for k in raw if k in allowed}
+    if "bpm" in v:
+        v["bpm"] = float(v["bpm"]) if v["bpm"] not in ("", None) else None
+    if "rating" in v:
+        v["rating"] = max(0, min(5, int(v["rating"] or 0)))
+    if "tags" in v and isinstance(v["tags"], str):
+        v["tags"] = [x.strip() for x in v["tags"].split(",") if x.strip()]
+    written, failed = 0, []
+    for uid in b.get("uids") or []:
+        if not isinstance(uid, str) or len(uid) < 2 or not uid[1:].isdigit():
+            continue
+        iid = int(uid[1:])
+        if uid[0] == "p":
+            pv = {("name" if k == "title" else "tempo" if k == "bpm" else k): x for k, x in v.items() if k != "artist"}
+            if "key_root" in pv:
+                pv["key_source"] = "user"
+            if pv:
+                db.update(iid, pv, lock_fields=True)
+        elif uid[0] == "i":
+            if v:
+                db.update_import(iid, dict(v), lock_fields=True)
+            t = db.get_import(iid)
+            if b.get("write_file") and t:
+                try:
+                    _write_file_tags(t["path"], v); written += 1
+                except Exception as exc:
+                    failed.append(f"{os.path.basename(t['path'])}: {exc}")
+    return jsonify(ok=True, written=written, failed=failed)
+
+
+def _places():
+    home = os.path.expanduser("~")
+    out = [{"label": "Benutzerordner", "path": home}]
+    for label, sub in (("Musik", "Music"), ("Downloads", "Downloads"), ("Schreibtisch", "Desktop"), ("Dokumente", "Documents")):
+        p = os.path.join(home, sub)
+        if os.path.isdir(p):
+            out.append({"label": label, "path": p})
+    if platform_util.IS_WIN:
+        import string
+        out += [{"label": f"Laufwerk {d}:", "path": f"{d}:\\"} for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+    elif os.path.isdir("/Volumes"):
+        out += [{"label": v, "path": os.path.join("/Volumes", v)} for v in sorted(os.listdir("/Volumes")) if not v.startswith(".")]
+    return out
+
+
+@app.get("/api/fs/list")
+def api_fs_list():
+    """Ordner-Browser für den Import: Unterordner und Audiodateien eines Ordners."""
+    from core.als_parser import clean_path
+    path = clean_path(request.args.get("path") or "~")
+    if not os.path.isdir(path):
+        path = os.path.dirname(path) if os.path.isdir(os.path.dirname(path)) else os.path.expanduser("~")
+    dirs, files = [], []
+    try:
+        with os.scandir(path) as it:
+            for e in it:
+                if e.name.startswith(".") or e.name.startswith("$"):
+                    continue
+                try:
+                    if e.is_dir():
+                        dirs.append({"name": e.name, "path": e.path})
+                    elif e.name.lower().endswith(AUDIO_EXT):
+                        files.append(e.name)
+                except OSError:
+                    pass
+    except PermissionError:
+        return jsonify(path=path, parent=os.path.dirname(path), dirs=[], files=[], places=_places(), error="Kein Zugriff auf diesen Ordner.")
+    norm = os.path.normpath(path)
+    parent = os.path.dirname(norm) or None
+    if parent == norm:  # "/" bzw. "C:\\"
+        parent = None
+    dirs.sort(key=lambda d: d["name"].casefold()); files.sort(key=str.casefold)
+    imported = {r["path"] for r in db.db().execute("SELECT path FROM imports")}
+    return jsonify(path=path, parent=parent, dirs=dirs, files=files[:500], file_count=len(files),
+                   already=sum(1 for f in files if os.path.join(path, f) in imported), places=_places())
 
 
 @app.get("/api/dj/library")
