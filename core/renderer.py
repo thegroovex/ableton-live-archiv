@@ -58,55 +58,85 @@ def _doc_is(als_path: str, doc: str) -> bool:
     return bool(doc) and _n(unquote(doc)).rstrip("/").endswith(_n(als_path))
 
 
-def _dismiss_save_dialog() -> str:
-    """Beantwortet Lives Frage "Änderungen sichern?" mit 'Don’t Save'.
+def _mouse_click(x: float, y: float) -> None:
+    """Echter Mausklick über CoreGraphics. Lives selbst gezeichnete Knöpfe reagieren nur darauf,
+    nicht auf 'click at' von System Events (das drückt nur Bedienungshilfe-Elemente)."""
+    import ctypes
+    import ctypes.util
 
-    Live zeichnet seine Dialoge selbst, die Knöpfe sind für macOS oft unsichtbar. Darum zuerst
-    echte Knöpfe suchen, sonst das kleine Dialogfenster ohne Titel finden und auf die Stelle klicken,
-    an der Live 'Don’t Save' immer zeichnet (links unten). Sicher, weil Live Archiv nur rendert,
-    wenn Live vorher geschlossen war: jede Frage betrifft also ein Set, das das Tool selbst geöffnet hat.
-    """
+    class CGPoint(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_double), ("y", ctypes.c_double)]
+
+    cg = ctypes.cdll.LoadLibrary("/System/Library/Frameworks/ApplicationServices.framework/ApplicationServices")
+    cf = ctypes.cdll.LoadLibrary(ctypes.util.find_library("CoreFoundation"))
+    cg.CGEventCreateMouseEvent.restype = ctypes.c_void_p
+    cg.CGEventCreateMouseEvent.argtypes = [ctypes.c_void_p, ctypes.c_uint32, CGPoint, ctypes.c_uint32]
+    cg.CGEventPost.argtypes = [ctypes.c_uint32, ctypes.c_void_p]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+    pt = CGPoint(x, y)
+    for kind in (5, 1, 2):  # bewegen, Taste runter, Taste hoch
+        ev = cg.CGEventCreateMouseEvent(None, kind, pt, 0)
+        cg.CGEventPost(0, ev)
+        cf.CFRelease(ev)
+        time.sleep(0.08)
+
+
+def _find_save_dialog() -> tuple[float, float, float, float] | None:
+    """Position und Größe von Lives Sichern-Dialog in Punkten (AXDialog, ca. 504 x 149 pt)."""
     script = f'''
     tell application "System Events" to tell process "{LIVE_PROCESS}"
         repeat with w in windows
-            repeat with b in (buttons of w)
-                set n to ""
+            try
+                set sr to ""
                 try
-                    set n to (name of b) as text
+                    set sr to subrole of w
                 end try
-                if (n starts with "Don" and n contains "Save") or n contains "Nicht sichern" or n contains "Nicht speichern" then
-                    click b
-                    return "clicked"
+                set t to ""
+                try
+                    set t to (name of w) as text
+                end try
+                set {{wx, wy}} to position of w
+                set {{ww, wh}} to size of w
+                if sr is "AXDialog" or (t is "" and ww > 220 and ww < 720 and wh > 60 and wh < 260) then
+                    return (wx as text) & "," & (wy as text) & "," & (ww as text) & "," & (wh as text)
                 end if
-            end repeat
-        end repeat
-        repeat with w in windows
-            set t to ""
-            try
-                set t to (name of w) as text
             end try
-            set {{wx, wy}} to position of w
-            set {{ww, wh}} to size of w
-            -- Größen in Punkten (Retina: halbe Pixel). Lives Sichern-Dialog ist ca. 330 x 100 pt.
-            -- Plug-in-Fenster heißen "1-Serum/…" und werden über den Bindestrich ausgeschlossen.
-            set sr to ""
-            try
-                set sr to subrole of w
-            end try
-            -- Gemessen auf MacBook Pro: Dialog 504 x 149 pt, Subrolle AXDialog, ohne Titel.
-            if sr is "AXDialog" or (t does not contain "-" and t does not contain "/" and ww > 220 and ww < 720 and wh > 60 and wh < 260) then
-                set frontmost to true
-                delay 0.2
-                click at {{(wx + ww * 0.15) as integer, (wy + wh * 0.8) as integer}}
-                return "clicked"
-            end if
         end repeat
     end tell
     return "none"'''
     try:
-        return _osa(script, timeout=10)
+        out = _osa(script, timeout=10)
+    except Exception:
+        return None
+    if out == "none" or out.count(",") != 3:
+        return None
+    try:
+        x, y, w, h = (float(v.replace(" ", "")) for v in out.split(","))
+    except ValueError:
+        return None
+    if w > 720 or h > 260:  # Sicherheitsnetz: nie ins Hauptfenster klicken
+        return None
+    return x, y, w, h
+
+
+def _dismiss_save_dialog() -> str:
+    """Beantwortet Lives Frage "Save changes …?" mit 'Don’t Save' (links unten im Dialog).
+
+    Sicher, weil Live Archiv nur rendert, wenn Live vorher geschlossen war: jede Frage betrifft
+    also ein Set, das das Tool selbst geöffnet hat.
+    """
+    box = _find_save_dialog()
+    if not box:
+        return "none"
+    x, y, w, h = box
+    try:
+        _osa(f'tell application "System Events" to set frontmost of process "{LIVE_PROCESS}" to true', timeout=5)
+        time.sleep(0.3)
+        _mouse_click(x + w * 0.15, y + h * 0.8)
     except Exception:
         return "error"
+    time.sleep(0.8)
+    return "clicked" if not _find_save_dialog() else "still-open"
 
 
 def live_is_running() -> bool:
@@ -245,3 +275,8 @@ def _to_mp3(src: str) -> str:
     subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-i", src, "-b:a", "256k", dst], check=True)
     os.remove(src)
     return dst
+
+
+if __name__ == "__main__":  # Test: bei offenem Sichern-Dialog  ./.venv/bin/python -m core.renderer
+    print("Dialog:", _find_save_dialog())
+    print("Ergebnis:", _dismiss_save_dialog())
