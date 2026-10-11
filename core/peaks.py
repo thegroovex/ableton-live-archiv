@@ -47,7 +47,7 @@ def cached(path: str, cache_dir: str, key: str) -> dict:
     mtime = os.path.getmtime(path)
     if os.path.exists(cache):
         try:
-            with open(cache) as fh:
+            with open(cache, encoding="utf-8") as fh:
                 data = json.load(fh)
             if data.get("src_mtime") == mtime and data.get("src") == path:
                 return data
@@ -55,6 +55,6 @@ def cached(path: str, cache_dir: str, key: str) -> dict:
             pass
     data = compute(path)
     data.update(src=path, src_mtime=mtime)
-    with open(cache, "w") as fh:
+    with open(cache, "w", encoding="utf-8") as fh:
         json.dump(data, fh)
     return data
