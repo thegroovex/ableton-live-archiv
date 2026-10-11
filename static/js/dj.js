@@ -504,28 +504,62 @@ function applyCrossfader() { const [a, b] = DJL.crossfaderGains(DJ.xfader); if (
 function applyHeadMix() { if (DJ.headCue) { DJ.headCue.gain.value = Math.cos(DJ.headMix * Math.PI / 2); DJ.headMaster.gain.value = Math.sin(DJ.headMix * Math.PI / 2); } }
 function togglePfl(i) { const d = DJ.decks[i]; d.pfl = !d.pfl; d.applyPfl(); $(`[data-pfl="${i}"]`).classList.toggle("on", d.pfl); }
 
-// --------------------------------------------------------------- Bibliothek
+// --------------------------------------------------------------- Bibliothek + Crates/Playlists (wie Serato DJ Pro)
+DJ.view = { type: "all" };   // all | src (Live/Import) | pl (Playlist-ID)
+DJ.playlists = []; DJ.selUids = new Set(); DJ.sel = 0;
 async function loadLibrary() {
-  DJ.lib = await api("/api/dj/library");
-  renderLibrary();
+  [DJ.lib, DJ.playlists] = await Promise.all([api("/api/dj/library"), api("/api/dj/playlists").catch(() => [])]);
+  if (DJ.view.type === "pl" && !DJ.playlists.some(p => p.id === DJ.view.id)) DJ.view = { type: "all" };
+  renderCrates(); renderLibrary();
 }
-function visibleLib() { const src = $("#dj-src").value; return DJ.lib.filter(t => !src || t.source === src); }
+async function loadPlaylists() { DJ.playlists = await api("/api/dj/playlists"); renderCrates(); }
+const curPlaylist = () => DJ.view.type === "pl" ? DJ.playlists.find(p => p.id === DJ.view.id) : null;
+function visibleLib() {
+  let list;
+  const pl = curPlaylist();
+  if (pl) { const by = new Map(DJ.lib.map(t => [t.uid, t])); list = pl.items.map(u => by.get(u)).filter(Boolean); }
+  else list = DJ.lib.filter(t => DJ.view.type !== "src" || t.source === DJ.view.src);
+  const q = ($("#dj-q")?.value || "").trim().toLowerCase();
+  if (q) list = list.filter(t => [t.title, t.artist, t.genre, keyLabel(t.key_root, t.key_mode), camelot(t.key_root, t.key_mode), t.bpm ? Math.round(t.bpm) : ""].join(" ").toLowerCase().includes(q));
+  return list;
+}
+
+function renderCrates() {
+  const n = src => DJ.lib.filter(t => !src || t.source === src).length;
+  const v = DJ.view, item = (sel, attrs, icon, name, count, extra = "") =>
+    `<div class="crate${sel ? " sel" : ""}" ${attrs}><span class="ci">${icon}</span><span class="cn">${esc(name)}</span><span class="n">${count}</span>${extra}</div>`;
+  $("#crates-fixed").innerHTML =
+    item(v.type === "all", 'data-view="all"', "♫", "Alle Tracks", n()) +
+    item(v.type === "src" && v.src === "Live", 'data-view="src" data-src="Live"', "◆", "Live-Renderings", n("Live")) +
+    item(v.type === "src" && v.src === "Import", 'data-view="src" data-src="Import"', "⤓", "Importiert", n("Import"));
+  $("#pl-list").innerHTML = DJ.playlists.map(p => item(v.type === "pl" && v.id === p.id, `data-view="pl" data-pl="${p.id}" draggable="true" title="Doppelklick: umbenennen · Tracks hierher ziehen"`, "▤", p.name, p.count,
+    `<button class="cx" data-pldel="${p.id}" title="Playlist löschen">✕</button>`)).join("") ||
+    `<div class="crate-empty">Noch keine Playlists. Lege eine an oder ziehe Tracks auf „+ Playlist“.</div>`;
+}
+
 function renderLibrary() {
-  const list = visibleLib();
+  const list = visibleLib(), pl = curPlaylist();
   DJ.sel = DJL.clamp(DJ.sel, 0, Math.max(0, list.length - 1));
   const playing = DJ.decks.find(d => d.playing && d.track)?.track;
   const ref = playing ? camelot(playing.key_root, playing.key_mode) : null;
-  $("#djcount").textContent = `${list.length} Tracks`;
+  const loaded = new Set(DJ.decks.map(d => d.track?.uid).filter(Boolean));
+  $("#djcount").textContent = pl ? `${esc(pl.name)} · ${list.length} Tracks` : `${list.length} Tracks`;
+  $("#djlist").classList.toggle("in-pl", !!pl);
   $("#djlist tbody").innerHTML = list.map((t, i) => {
     const cam = camelot(t.key_root, t.key_mode), fit = ref && DJL.camelotCompatible(ref, cam);
-    return `<tr data-i="${i}" class="${i === DJ.sel ? "sel" : ""}">
+    const cls = [i === DJ.sel ? "cursor" : "", DJ.selUids.has(t.uid) || (i === DJ.sel && !DJ.selUids.size) ? "sel" : "", loaded.has(t.uid) ? "loaded" : ""].join(" ");
+    return `<tr data-i="${i}" data-uid="${t.uid}" class="${cls}" draggable="true">
+      <td class="mono num">${pl ? i + 1 : ""}</td>
       <td>${esc(t.title)}</td><td class="wcol"><canvas class="mini" data-djmini="${t.uid}" width="320" height="44" title="Klick: auf das freie Deck laden"></canvas></td><td>${esc(t.artist)}</td><td class="mono">${t.bpm ? (+t.bpm).toFixed(1) : "–"}</td>
       <td class="mono">${keyLabel(t.key_root, t.key_mode)}</td><td class="mono" style="${fit ? "color:var(--green)" : ""}">${cam}${fit ? " ●" : ""}</td>
       <td>${esc(t.genre || "")}</td><td class="mono">${fmtTime(t.duration)}</td><td><span class="badge">${t.source}</span></td>
-      <td><button class="btn small" data-load="0">A</button> <button class="btn small" data-load="1">B</button></td></tr>`;
+      <td class="acts"><button class="btn small" data-load="0">A</button> <button class="btn small" data-load="1">B</button> <button class="btn small" data-addpl title="Zu Playlist hinzufügen">＋</button>${pl ? ` <button class="btn small" data-rm title="Aus Playlist entfernen (Entf)">✕</button>` : ""}</td></tr>`;
   }).join("");
+  $("#djempty").hidden = list.length > 0;
+  $("#djempty").textContent = pl ? "Diese Playlist ist leer. Ziehe Tracks aus „Alle Tracks“ auf die Playlist links oder nutze ＋ in der Trackliste." : "Keine Tracks gefunden.";
   loadDjMinis();
 }
+
 // Mini-Waveforms in der DJ-Liste (gleiche Darstellung wie im Archiv), mit Fortschritt der geladenen Decks
 DJ.mini = {};
 const djMiniQueue = []; let djMiniBusy = 0;
@@ -552,30 +586,180 @@ function drawDjMini(c, uid) {
   const d = DJ.decks.find(x => x.track?.uid === uid && x.duration);
   drawMiniWave(c, DJ.mini[uid], d ? d.pos / d.duration : -1);
 }
+
+const selectedUids = () => { const list = visibleLib(); return DJ.selUids.size ? list.filter(t => DJ.selUids.has(t.uid)).map(t => t.uid) : (list[DJ.sel] ? [list[DJ.sel].uid] : []); };
+
+// Klick: auswählen (Cmd/Strg = mehrere, Shift = Bereich), Buttons: laden, hinzufügen, entfernen
 $("#djlist tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr"); if (!tr) return;
-  DJ.sel = +tr.dataset.i;
+  const i = +tr.dataset.i, uid = tr.dataset.uid, list = visibleLib();
+  if (e.target.closest("[data-addpl]")) { DJ.sel = i; if (!DJ.selUids.has(uid)) DJ.selUids.clear(); return playlistMenu(e.target.closest("[data-addpl]"), selectedUids()); }
+  if (e.target.closest("[data-rm]")) { DJ.sel = i; if (!DJ.selUids.has(uid)) DJ.selUids.clear(); return removeFromPlaylist(selectedUids()); }
+  if (e.metaKey || e.ctrlKey) { if (!DJ.selUids.size && list[DJ.sel]) DJ.selUids.add(list[DJ.sel].uid); DJ.selUids.has(uid) ? DJ.selUids.delete(uid) : DJ.selUids.add(uid); }
+  else if (e.shiftKey) { const [a, b] = [Math.min(DJ.sel, i), Math.max(DJ.sel, i)]; DJ.selUids = new Set(list.slice(a, b + 1).map(t => t.uid)); }
+  else DJ.selUids.clear();
+  DJ.sel = i;
   const mc = e.target.closest("canvas[data-djmini]");
-  if (mc) { const free = DJ.decks.find(d => !d.playing) || DJ.decks[0]; free.load(visibleLib()[DJ.sel]); }
+  if (mc) { const free = DJ.decks.find(d => !d.playing) || DJ.decks[0]; free.load(list[i]); }
   const b = e.target.closest("[data-load]");
-  if (b) DJ.decks[+b.dataset.load].load(visibleLib()[DJ.sel]);
+  if (b) DJ.decks[+b.dataset.load].load(list[i]);
   renderLibrary();
 });
-$("#dj-src").onchange = renderLibrary;
+$("#djlist tbody").addEventListener("dblclick", e => {
+  const tr = e.target.closest("tr"); if (!tr || e.target.closest("button, canvas")) return;
+  const free = DJ.decks.find(d => !d.playing) || DJ.decks[0]; free.load(visibleLib()[+tr.dataset.i]);
+});
+$("#dj-q").addEventListener("input", () => { DJ.sel = 0; DJ.selUids.clear(); renderLibrary(); });
+$("#dj-q").addEventListener("keydown", e => { if (e.key === "Escape") { e.target.value = ""; e.target.blur(); renderLibrary(); } });
+
 function browse(delta) {
+  DJ.selUids.clear();
   DJ.sel = DJL.clamp(DJ.sel + delta, 0, visibleLib().length - 1); renderLibrary();
-  $("#djlist tr.sel")?.scrollIntoView({ block: "nearest" });
+  $("#djlist tr.cursor")?.scrollIntoView({ block: "nearest" });
 }
 function loadSelected(deck) { const t = visibleLib()[DJ.sel]; if (t) DJ.decks[deck].load(t); }
+
+// ---- Crates-Spalte
+$("#crates").addEventListener("click", async e => {
+  const del = e.target.closest("[data-pldel]");
+  if (del) {
+    const p = DJ.playlists.find(x => x.id === +del.dataset.pldel);
+    if (p && confirm(`Playlist „${p.name}“ löschen? Die Tracks selbst bleiben erhalten.`)) {
+      await api(`/api/dj/playlists/${p.id}`, { method: "DELETE" });
+      if (DJ.view.type === "pl" && DJ.view.id === p.id) DJ.view = { type: "all" };
+      await loadPlaylists(); renderLibrary();
+    }
+    return;
+  }
+  const c = e.target.closest("[data-view]"); if (!c || c.querySelector("input")) return;
+  DJ.view = c.dataset.view === "pl" ? { type: "pl", id: +c.dataset.pl } : c.dataset.view === "src" ? { type: "src", src: c.dataset.src } : { type: "all" };
+  DJ.sel = 0; DJ.selUids.clear(); renderCrates(); renderLibrary();
+});
+$("#crates").addEventListener("dblclick", e => { const c = e.target.closest("[data-pl]"); if (c) renamePlaylist(+c.dataset.pl, c.querySelector(".cn")); });
+$("#pl-add").onclick = () => newPlaylist();
+
+async function newPlaylist(uids = [], open = true) {
+  const name = prompt("Name der neuen Playlist:", `Playlist ${DJ.playlists.length + 1}`);
+  if (name == null) return null;
+  const p = await api("/api/dj/playlists", { method: "POST", body: { name, uids } });
+  if (open && !uids.length) { DJ.view = { type: "pl", id: p.id }; DJ.sel = 0; DJ.selUids.clear(); }
+  await loadPlaylists(); renderLibrary();
+  toast(uids.length ? `${uids.length} Track${uids.length > 1 ? "s" : ""} → „${p.name}“` : `Playlist „${p.name}“ angelegt`);
+  return p;
+}
+function renamePlaylist(id, span) {
+  const p = DJ.playlists.find(x => x.id === id); if (!p || !span) return;
+  const inp = document.createElement("input"); inp.className = "field crate-edit"; inp.value = p.name;
+  span.replaceWith(inp); inp.focus(); inp.select();
+  let done = false;
+  const finish = async ok => {
+    if (done) return; done = true;
+    if (ok && inp.value.trim() && inp.value.trim() !== p.name) await api(`/api/dj/playlists/${id}`, { method: "PATCH", body: { name: inp.value.trim() } });
+    await loadPlaylists(); renderLibrary();
+  };
+  inp.onkeydown = e => { e.stopPropagation(); if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+  inp.onblur = () => finish(true);
+}
+async function addToPlaylist(id, uids, index) {
+  if (!uids.length) return;
+  const p = DJ.playlists.find(x => x.id === id);
+  const before = p ? p.count : 0;
+  const r = await api(`/api/dj/playlists/${id}/tracks`, { method: "POST", body: { uids, index } });
+  await loadPlaylists(); if (DJ.view.type === "pl") renderLibrary();
+  const added = r.items.length - before;
+  toast(added ? `${added} Track${added > 1 ? "s" : ""} → „${p?.name}“` : `Schon in „${p?.name}“`);
+}
+async function removeFromPlaylist(uids) {
+  const p = curPlaylist(); if (!p || !uids.length) return;
+  const set = new Set(uids);
+  await api(`/api/dj/playlists/${p.id}/tracks`, { method: "PUT", body: { uids: p.items.filter(u => !set.has(u)) } });
+  DJ.selUids.clear(); await loadPlaylists(); renderLibrary();
+}
+// Kleines Menü am ＋-Knopf: vorhandene Playlists oder neue
+function playlistMenu(anchor, uids) {
+  $("#pl-menu")?.remove();
+  const m = document.createElement("div"); m.id = "pl-menu"; m.className = "pl-menu";
+  m.innerHTML = `<div class="pm-h">Zu Playlist hinzufügen${uids.length > 1 ? ` (${uids.length})` : ""}</div>` +
+    DJ.playlists.map(p => `<div class="pm-i" data-to="${p.id}">▤ ${esc(p.name)} <span class="n">${p.count}</span></div>`).join("") +
+    `<div class="pm-i pm-new" data-to="new">＋ Neue Playlist …</div>`;
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  m.style.left = Math.min(innerWidth - 230, r.left - 180) + "px";
+  m.style.top = (r.bottom + 4 + 260 > innerHeight ? r.top - Math.min(260, m.offsetHeight) - 4 : r.bottom + 4) + "px";
+  m.onclick = e => { const it = e.target.closest("[data-to]"); if (!it) return; m.remove(); it.dataset.to === "new" ? newPlaylist(uids, false) : addToPlaylist(+it.dataset.to, uids); };
+  setTimeout(() => document.addEventListener("click", function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("click", off); } }), 0);
+}
+
+// ---- Drag & Drop: Tracks auf Playlists ziehen, in einer Playlist umsortieren, Playlists sortieren
+const DT_TRACKS = "application/x-live-archiv-tracks", DT_PL = "application/x-live-archiv-playlist";
+$("#djlist tbody").addEventListener("dragstart", e => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  const uid = tr.dataset.uid;
+  if (!DJ.selUids.has(uid)) { DJ.selUids.clear(); DJ.sel = +tr.dataset.i; }
+  const uids = selectedUids().includes(uid) ? selectedUids() : [uid];
+  e.dataTransfer.setData(DT_TRACKS, JSON.stringify(uids));
+  e.dataTransfer.effectAllowed = "copyMove";
+  const ghost = document.createElement("div"); ghost.className = "drag-ghost"; ghost.textContent = uids.length > 1 ? `${uids.length} Tracks` : tr.children[1].textContent;
+  document.body.appendChild(ghost); e.dataTransfer.setDragImage(ghost, 10, 10); setTimeout(() => ghost.remove(), 0);
+});
+const hasType = (e, t) => [...(e.dataTransfer?.types || [])].includes(t);
+$("#djlist tbody").addEventListener("dragover", e => {
+  if (!curPlaylist() || !hasType(e, DT_TRACKS)) return;
+  e.preventDefault(); e.stopPropagation();
+  const tr = e.target.closest("tr"); $$("#djlist tr.drop-before, #djlist tr.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after"));
+  if (tr) { const r = tr.getBoundingClientRect(); tr.classList.add(e.clientY < r.top + r.height / 2 ? "drop-before" : "drop-after"); }
+});
+$("#djlist tbody").addEventListener("dragleave", e => { if (!e.currentTarget.contains(e.relatedTarget)) $$("#djlist tr.drop-before, #djlist tr.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after")); });
+$("#djlist tbody").addEventListener("drop", async e => {
+  const pl = curPlaylist(); if (!pl || !hasType(e, DT_TRACKS)) return;
+  e.preventDefault(); e.stopPropagation();
+  const tr = e.target.closest("tr"); $$("#djlist tr.drop-before, #djlist tr.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after"));
+  const uids = JSON.parse(e.dataTransfer.getData(DT_TRACKS) || "[]");
+  let idx = pl.items.length;
+  if (tr) { const r = tr.getBoundingClientRect(); idx = pl.items.indexOf(tr.dataset.uid) + (e.clientY < r.top + r.height / 2 ? 0 : 1); }
+  const moving = new Set(uids), rest = pl.items.filter(u => !moving.has(u));
+  const at = pl.items.slice(0, idx).filter(u => !moving.has(u)).length;
+  const order = [...rest.slice(0, at), ...uids, ...rest.slice(at)];
+  await api(`/api/dj/playlists/${pl.id}/tracks`, { method: "PUT", body: { uids: order } });
+  DJ.selUids = new Set(uids); await loadPlaylists(); renderLibrary();
+});
+$("#crates").addEventListener("dragstart", e => { const c = e.target.closest("[data-pl]"); if (c) { e.dataTransfer.setData(DT_PL, c.dataset.pl); e.dataTransfer.effectAllowed = "move"; } });
+$("#crates").addEventListener("dragover", e => {
+  const c = e.target.closest("[data-pl], #pl-add");
+  if (!c || !(hasType(e, DT_TRACKS) || (hasType(e, DT_PL) && c.dataset.pl))) return;
+  e.preventDefault(); $$("#crates .drop").forEach(x => x !== c && x.classList.remove("drop")); c.classList.add("drop");
+});
+$("#crates").addEventListener("dragleave", e => { const c = e.target.closest(".drop"); if (c && !c.contains(e.relatedTarget)) c.classList.remove("drop"); });
+$("#crates").addEventListener("drop", async e => {
+  const c = e.target.closest("[data-pl], #pl-add"); $$("#crates .drop").forEach(x => x.classList.remove("drop"));
+  if (!c) return;
+  e.preventDefault();
+  if (hasType(e, DT_TRACKS)) {
+    const uids = JSON.parse(e.dataTransfer.getData(DT_TRACKS) || "[]");
+    c.id === "pl-add" ? newPlaylist(uids, false) : addToPlaylist(+c.dataset.pl, uids);
+  } else if (hasType(e, DT_PL) && c.dataset.pl) {
+    const from = +e.dataTransfer.getData(DT_PL), to = +c.dataset.pl; if (from === to) return;
+    const ids = DJ.playlists.map(p => p.id).filter(id => id !== from); ids.splice(ids.indexOf(to), 0, from);
+    DJ.playlists = await api("/api/dj/playlists/order", { method: "PUT", body: { ids } }); renderCrates();
+  }
+});
+// Entf/Backspace entfernt markierte Tracks aus der geöffneten Playlist
+document.addEventListener("keydown", e => {
+  if (!$("#view-dj").classList.contains("active") || e.target.matches("input, textarea, select")) return;
+  if ((e.key === "Delete" || e.key === "Backspace") && curPlaylist()) { e.preventDefault(); removeFromPlaylist(selectedUids()); }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") { e.preventDefault(); $("#dj-q").focus(); }
+});
 
 // Import: Ordner-Pfad oder Drag & Drop
 $("#btn-import").onclick = () => openModal("#m-import");
 $("#i-go").onclick = async () => { await api("/api/dj/import", { method: "POST", body: { paths: [$("#i-path").value] } }); closeModals(); };
 const dz = $("#djdrop");
-dz.addEventListener("dragover", e => { e.preventDefault(); $("#dropzone").classList.add("hover"); });
+dz.addEventListener("dragover", e => { if (!hasType(e, "Files")) return; e.preventDefault(); $("#dropzone").classList.add("hover"); });
 dz.addEventListener("dragleave", () => $("#dropzone").classList.remove("hover"));
 dz.addEventListener("drop", async e => {
-  e.preventDefault(); $("#dropzone").classList.remove("hover");
+  $("#dropzone").classList.remove("hover");
+  if (!hasType(e, "Files")) return;
+  e.preventDefault();
   const fd = new FormData(); [...e.dataTransfer.files].forEach(f => fd.append("files", f));
   await api("/api/dj/upload", { method: "POST", body: fd });
 });
@@ -632,7 +816,7 @@ function handleEvent(ev) {
     case "beatjump": if (ev.value) d.beatjump(ev.beats); break;
     case "load": if (ev.value) loadSelected(ev.deck); break;
     case "browse": browse(ev.value > 0 ? 1 : -1); break;
-    case "browsePress": if (ev.value) $("#dj-src").value = ""; renderLibrary(); break;
+    case "browsePress": if (ev.value) { DJ.view = { type: "all" }; DJ.sel = 0; renderCrates(); } renderLibrary(); break;
     case "crossfaderMSB": case "crossfaderLSB":
       DJ.xfader = DJ.hi.feed("xf", ev.action.endsWith("MSB") ? "MSB" : "LSB", ev.value); applyCrossfader(); break;
     case "headMixMSB": case "headMixLSB":
