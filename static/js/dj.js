@@ -352,7 +352,8 @@ class Deck {
   /* Takt-Anzeige (1–4) und Phasen-Versatz zum anderen Deck, wie die Beat-Bars am CDJ */
   drawPhase() {
     const c = this.phaseC; if (!c) return;
-    const dpr = devicePixelRatio || 1, w = c.clientWidth * dpr, h = c.clientHeight * dpr;
+    const dpr = devicePixelRatio || 1, w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+    if (!w || !h) return;
     if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
     const g = c.getContext("2d"); g.clearRect(0, 0, w, h);
     if (!this.track || !this.bpm) return;
@@ -376,9 +377,10 @@ class Deck {
     if (time) time.textContent = this.track ? `${fmtTime(this.pos)} / -${fmtTime(this.duration - this.pos)}` : "–";
     this.drawPhase();
     if (!this.peaks) return;
-    drawOverview(this.ovC, this.peaks.peaks, this.color, this.pos / this.duration, this.cues.map(c => c == null ? null : c / this.duration));
+    drawOverview(this.ovC, this.peaks.peaks, this.color, this.pos / this.duration, this.cues.map(c => c == null ? null : c / this.duration), this.peaks);
     // Scroll-Wellenform: ±3 s um die Abspielposition
-    const c = this.zoomC, dpr = devicePixelRatio || 1, w = c.clientWidth * dpr, h = c.clientHeight * dpr;
+    const c = this.zoomC, dpr = devicePixelRatio || 1, w = Math.round(c.clientWidth * dpr), h = Math.round(c.clientHeight * dpr);
+    if (!w || !h) return;
     if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
     const g = c.getContext("2d"); g.clearRect(0, 0, w, h);
     const span = 6, ps = this.peaks.perSecond, start = this.pos - span / 2, mid = h / 2, pk = this.peaks.peaks;
@@ -387,7 +389,7 @@ class Deck {
     for (let x = 0; x < w; x += 2) {
       const tsec = start + x / w * span, idx = Math.floor(tsec * ps);
       if (idx < 0 || idx >= pk.length) continue;
-      const v = pk[idx]; g.fillStyle = tsec < this.pos ? "#777" : this.color;
+      const v = pk[idx], bd = this.peaks; g.fillStyle = Wave.bandColor(bd.low[idx], bd.mid[idx], bd.high[idx], tsec < this.pos ? 0.5 : 1);
       g.fillRect(x, mid - v * mid * 0.95, 2, Math.max(1, v * h * 0.95));
     }
     if (this.bpm) {
