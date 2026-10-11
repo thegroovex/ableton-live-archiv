@@ -68,6 +68,7 @@ class Deck {
     this.cue = 0; this.cues = Array(8).fill(null); this.loop = null; this.loopIn = null;
     this.eq = { hi: 0.5, mid: 0.5, lo: 0.5 }; this.trim = 0.5; this.vol = 1; this.filter = 0.5; this.pfl = false;
     this.touch = false; this.ticks = 0; this.bendTimer = null;
+    this.span = +(localStorage.getItem("dj.zoom" + i) || 6); this.drag = null;
     this.keylock = false; this.autoBeats = 4; this.taps = []; this.nudging = 0; this.saveTimer = null;
     this.el = $(`#deck-${i}`);
     this.render();
@@ -119,7 +120,9 @@ class Deck {
     this.buffer = await DJ.ctx.decodeAudioData(data);
     this.duration = this.buffer.duration;
     this.peaks = computePeaks(this.buffer, 150);
+    this.env = null;
     if (!track.bpm) track.bpm = 0;
+    if (track.bpm && track.grid_offset == null) this.autoGrid(true);   // noch kein Grid gespeichert → automatisch erkennen
     this.sendBuffer();
     try { this.cues = (await api(`/api/dj/cues/${track.kind}/${track.id}`)).concat(Array(8).fill(null)).slice(0, 8); } catch (e) { this.cues = Array(8).fill(null); }
     this.render(); this.updateLeds(); midiLed(FLX4.LED.loadAnim(this.i));
@@ -199,21 +202,37 @@ class Deck {
   }
 
   // ---- Beatgrid
-  saveGrid() {
+  saveGrid(silent = false) {
     this.track.grid_offset = DJL.normGrid(this.grid, this.bpm);
     this.renderState();
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => api(`/api/dj/grid/${this.track.kind}/${this.track.id}`, { method: "PATCH", body: { bpm: this.track.bpm, grid_offset: this.track.grid_offset } })
-      .then(() => toast?.("Beatgrid gespeichert")).catch(() => {}), 600);
+    const t = this.track;
+    this.saveTimer = setTimeout(() => api(`/api/dj/grid/${t.kind}/${t.id}`, { method: "PATCH", body: { bpm: t.bpm, grid_offset: t.grid_offset } })
+      .then(() => { const l = DJ.lib?.find(x => x.uid === t.uid); if (l) { l.bpm = t.bpm; l.grid_offset = t.grid_offset; } if (!silent) toast?.("Beatgrid gespeichert"); }).catch(() => {}), 600);
   }
   gridShift(ms) { if (!this.track || !this.bpm) return; this.track.grid_offset = this.grid + ms / 1000; this.saveGrid(); }
   gridHere() { if (!this.track || !this.bpm) return; this.track.grid_offset = DJL.gridFromDownbeat(this.pos, this.bpm); this.saveGrid(); }
   setBpm(v) {
     if (!this.track || !(v > 20 && v < 400)) return;
-    const anchor = this.bpm ? DJL.snapToBeat(this.pos, this.bpm, this.grid) : this.pos;   // Beat unter dem Abspielkopf bleibt stehen
+    const old = this.bpm, oldGrid = this.grid;
+    const anchor = old ? DJL.snapToBeat(this.pos, old, oldGrid) : this.pos;   // Beat unter dem Abspielkopf und Taktzählung bleiben stehen
     this.track.bpm = Math.round(v * 100) / 100;
-    this.track.grid_offset = DJL.gridFromDownbeat(anchor, this.track.bpm);
+    this.track.grid_offset = DJL.regrid(anchor, old, oldGrid, this.track.bpm);
     this.saveGrid();
+  }
+  /* Beatgrid automatisch aus dem Audio: Phase über den ganzen Track, erster Einsatz = Takt 1 */
+  autoGrid(silent = false) {
+    if (!this.track || !this.bpm || !this.buffer) return;
+    if (!this.env) { const b = this.buffer; this.env = Wave.onsetEnvelope(b.getChannelData(0), b.numberOfChannels > 1 ? b.getChannelData(1) : null, b.sampleRate); }
+    const r = DJL.detectGrid(this.env.flux, this.env.rms, this.env.hop, this.bpm);
+    this.track.grid_offset = r.grid;
+    this.saveGrid(silent);
+    if (!silent) toast?.(`Beatgrid erkannt – Takt 1 bei ${r.grid.toFixed(3)} s`);
+  }
+  setZoom(span) {
+    this.span = DJL.clamp(span, 1, 32);
+    localStorage.setItem("dj.zoom" + this.i, this.span);
+    const z = this.el.querySelector("[data-zoomlbl]"); if (z) z.textContent = this.span < 10 ? this.span.toFixed(1) + " s" : Math.round(this.span) + " s";
   }
   tap() {
     const now = performance.now() / 1000;
@@ -279,7 +298,9 @@ class Deck {
         <div class="ratebox"><span class="timeinfo" data-rate></span><button class="btn small" data-mt title="Master Tempo: Tonhöhe bleibt beim Pitchen gleich">MT</button></div>
         <canvas class="phase" title="Takt (1–4) und Versatz zum anderen Deck"></canvas>
       </div>
-      <canvas class="zoom"></canvas><canvas class="overview"></canvas>
+      <div class="zoomwrap"><canvas class="zoom" title="Ziehen: Position verschieben (Shift = fein) · Mausrad: Zoom · Doppelklick: Cue setzen"></canvas>
+        <div class="zoombtns"><button class="btn small" data-zoom="0.5" title="Hineinzoomen">＋</button><span class="zoomlbl" data-zoomlbl></span><button class="btn small" data-zoom="2" title="Herauszoomen">－</button></div></div>
+      <canvas class="overview"></canvas>
       <div class="transport">
         <button class="round cue" data-cue>CUE</button><button class="round" data-play>▶❚❚</button>
         <button class="btn small" data-sync>SYNC</button>
@@ -296,7 +317,8 @@ class Deck {
       <div class="gridrow">
         <span class="lbl">Grid</span>
         <button class="btn small" data-gs="-10" title="Grid 10 ms früher (Shift: 1 ms)">◀</button><button class="btn small" data-gs="10" title="Grid 10 ms später (Shift: 1 ms)">▶</button>
-        <button class="btn small" data-ghere title="Beat genau an der Abspielposition">Beat hier</button>
+        <button class="btn small" data-gauto title="Beatgrid automatisch erkennen (erster Einsatz = Takt 1)">AUTO</button>
+        <button class="btn small" data-ghere title="Takt-1 genau an die Abspielposition legen">Beat hier</button>
         <button class="btn small" data-bpmx="0.5">÷2</button><button class="btn small" data-bpmx="2">×2</button>
         <button class="btn small" data-bpmd="-0.01">−.01</button><input class="field bpmin" data-bpmin value="${this.bpm ? this.bpm.toFixed(2) : ""}" placeholder="BPM"><button class="btn small" data-bpmd="0.01">+.01</button>
         <button class="btn small" data-tap>TAP</button>
@@ -320,6 +342,8 @@ class Deck {
     q("[data-reloop]").onclick = () => this.reloop(); q("[data-lhalf]").onclick = () => this.loopHalve(); q("[data-ldbl]").onclick = () => this.loopDouble();
     this.el.querySelectorAll("[data-gs]").forEach(b => b.onclick = e => this.gridShift(+b.dataset.gs / (e.shiftKey ? 10 : 1)));
     q("[data-ghere]").onclick = () => this.gridHere();
+    q("[data-gauto]").onclick = () => this.autoGrid();
+    this.el.querySelectorAll("[data-zoom]").forEach(b => b.onclick = () => this.setZoom(this.span * +b.dataset.zoom));
     this.el.querySelectorAll("[data-bpmx]").forEach(b => b.onclick = () => this.setBpm(this.bpm * +b.dataset.bpmx));
     this.el.querySelectorAll("[data-bpmd]").forEach(b => b.onclick = () => this.setBpm(this.bpm + +b.dataset.bpmd));
     q("[data-bpmin]").onchange = e => this.setBpm(parseFloat(e.target.value.replace(",", ".")));
@@ -328,7 +352,31 @@ class Deck {
     q(".overview").onclick = e => { const r = e.target.getBoundingClientRect(); this.seek((e.clientX - r.left) / r.width * this.duration); };
     this.phaseC = q(".phase");
     this.zoomC = q(".zoom"); this.ovC = q(".overview");
+    this.bindZoom(); this.setZoom(this.span);
     this.renderPads(); this.renderState();
+  }
+  /* Scroll-Wellenform: ziehen wie ein Jogwheel, Mausrad zoomt, Doppelklick setzt den Cue */
+  bindZoom() {
+    const c = this.zoomC;
+    c.addEventListener("wheel", e => { e.preventDefault(); this.setZoom(this.span * Math.pow(1.15, Math.sign(e.deltaY))); }, { passive: false });
+    c.addEventListener("pointerdown", e => {
+      if (!this.track || e.button !== 0) return;
+      c.setPointerCapture(e.pointerId);
+      this.drag = { x: e.clientX, pos: this.pos, moved: false };
+      c.classList.add("dragging");
+    });
+    c.addEventListener("pointermove", e => {
+      if (!this.drag) return;
+      const dx = e.clientX - this.drag.x; if (Math.abs(dx) > 2) this.drag.moved = true;
+      const fine = e.shiftKey ? 0.25 : 1;
+      this.seek(this.drag.pos - dx / c.clientWidth * this.span * fine);
+    });
+    const end = () => { if (!this.drag) return; this.drag = null; c.classList.remove("dragging"); };
+    c.addEventListener("pointerup", end); c.addEventListener("pointercancel", end);
+    c.addEventListener("dblclick", () => {
+      if (!this.track || this.playing) return;
+      this.cue = this.pos;   // bewusst ohne Quantize: genau dort, wo die Wellenform steht this.renderState(); toast?.("Cue gesetzt");
+    });
   }
   renderPads() { this.el.querySelectorAll("[data-hc]").forEach(b => b.classList.toggle("set", this.cues[+b.dataset.hc] != null)); }
   renderState() {
@@ -383,7 +431,7 @@ class Deck {
     if (!w || !h) return;
     if (c.width !== w) c.width = w; if (c.height !== h) c.height = h;
     const g = c.getContext("2d"); g.clearRect(0, 0, w, h);
-    const span = 6, ps = this.peaks.perSecond, start = this.pos - span / 2, mid = h / 2, pk = this.peaks.peaks;
+    const span = this.span, ps = this.peaks.perSecond, start = this.pos - span / 2, mid = h / 2, pk = this.peaks.peaks;
     if (this.loop) { const x0 = (this.loop.start - start) / span * w, x1 = (this.loop.end - start) / span * w; g.fillStyle = "rgba(143,211,111,.18)"; g.fillRect(x0, 0, x1 - x0, h); g.fillStyle = "#8fd36f"; g.fillRect(x0, 0, 2 * dpr, h); g.fillRect(x1 - 2 * dpr, 0, 2 * dpr, h); }
     else if (this.loopIn != null) { const x0 = (this.loopIn - start) / span * w; g.fillStyle = "#8fd36f"; g.fillRect(x0, 0, 2 * dpr, h); }
     for (let x = 0; x < w; x += 2) {
@@ -399,6 +447,7 @@ class Deck {
       }
     }
     this.cues.forEach((cu, i) => { if (cu == null) return; const x = (cu - start) / span * w; if (x < 0 || x > w) return; g.fillStyle = "#ff5f56"; g.fillRect(x, 0, 2 * dpr, h); g.font = `${10 * dpr}px sans-serif`; g.fillText(i + 1, x + 3, 11 * dpr); });
+    { const x = (this.cue - start) / span * w; if (x >= 0 && x <= w) { g.fillStyle = "#ffa940"; g.beginPath(); g.moveTo(x - 6 * dpr, 0); g.lineTo(x + 6 * dpr, 0); g.lineTo(x, 8 * dpr); g.fill(); g.fillRect(x - dpr / 2, 0, dpr, h); } }
     g.fillStyle = "#fff"; g.fillRect(w / 2 - dpr, 0, 2 * dpr, h);
   }
   level() {
@@ -470,15 +519,44 @@ function renderLibrary() {
   $("#djlist tbody").innerHTML = list.map((t, i) => {
     const cam = camelot(t.key_root, t.key_mode), fit = ref && DJL.camelotCompatible(ref, cam);
     return `<tr data-i="${i}" class="${i === DJ.sel ? "sel" : ""}">
-      <td>${esc(t.title)}</td><td>${esc(t.artist)}</td><td class="mono">${t.bpm ? (+t.bpm).toFixed(1) : "–"}</td>
+      <td>${esc(t.title)}</td><td class="wcol"><canvas class="mini" data-djmini="${t.uid}" width="320" height="44" title="Klick: auf das freie Deck laden"></canvas></td><td>${esc(t.artist)}</td><td class="mono">${t.bpm ? (+t.bpm).toFixed(1) : "–"}</td>
       <td class="mono">${keyLabel(t.key_root, t.key_mode)}</td><td class="mono" style="${fit ? "color:var(--green)" : ""}">${cam}${fit ? " ●" : ""}</td>
       <td>${esc(t.genre || "")}</td><td class="mono">${fmtTime(t.duration)}</td><td><span class="badge">${t.source}</span></td>
       <td><button class="btn small" data-load="0">A</button> <button class="btn small" data-load="1">B</button></td></tr>`;
   }).join("");
+  loadDjMinis();
+}
+// Mini-Waveforms in der DJ-Liste (gleiche Darstellung wie im Archiv), mit Fortschritt der geladenen Decks
+DJ.mini = {};
+const djMiniQueue = []; let djMiniBusy = 0;
+function loadDjMinis() {
+  $$("canvas[data-djmini]").forEach(c => {
+    const uid = c.dataset.djmini;
+    if (DJ.mini[uid]) drawDjMini(c, uid);
+    else if (DJ.mini[uid] !== false && !djMiniQueue.includes(uid)) djMiniQueue.push(uid);
+  });
+  pumpDjMinis();
+}
+function pumpDjMinis() {
+  while (djMiniBusy < 2 && djMiniQueue.length) {
+    const uid = djMiniQueue.shift(), t = DJ.lib.find(x => x.uid === uid); if (!t) continue;
+    djMiniBusy++;
+    fetch(t.kind === "p" ? `/api/peaks/${t.id}` : `/api/peaks/import/${t.id}`).then(r => r.ok ? r.json() : null).then(d => {
+      DJ.mini[uid] = d || false;
+      if (d) drawDjMini($(`canvas[data-djmini="${uid}"]`), uid);
+    }).catch(() => { DJ.mini[uid] = false; }).finally(() => { djMiniBusy--; pumpDjMinis(); });
+  }
+}
+function drawDjMini(c, uid) {
+  if (!c || !DJ.mini[uid]) return;
+  const d = DJ.decks.find(x => x.track?.uid === uid && x.duration);
+  drawMiniWave(c, DJ.mini[uid], d ? d.pos / d.duration : -1);
 }
 $("#djlist tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr"); if (!tr) return;
   DJ.sel = +tr.dataset.i;
+  const mc = e.target.closest("canvas[data-djmini]");
+  if (mc) { const free = DJ.decks.find(d => !d.playing) || DJ.decks[0]; free.load(visibleLib()[DJ.sel]); }
   const b = e.target.closest("[data-load]");
   if (b) DJ.decks[+b.dataset.load].load(visibleLib()[DJ.sel]);
   renderLibrary();
@@ -663,6 +741,7 @@ function frame() {
       if (d.synced) { const o = DJ.decks[1 - i]; if (o.track && o.bpm) { const r = DJL.syncRate(d.bpm, o.effBpm); if (Math.abs(r - d.rate) > 1e-4) { d.rate = r; d.applyRate(); d.renderState(); } } }
     });
   }
+  if (DJ.frameN % 10 === 0) DJ.decks.forEach(d => { if (d.track) drawDjMini($(`canvas[data-djmini="${d.track.uid}"]`), d.track.uid); });
   DJ.frameN = (DJ.frameN || 0) + 1;
   requestAnimationFrame(frame);
 }
