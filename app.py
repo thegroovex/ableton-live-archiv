@@ -460,6 +460,56 @@ def api_dj_library():
     return jsonify(db.dj_library())
 
 
+@app.get("/api/dj/playlists")
+def api_playlists():
+    return jsonify(db.playlists())
+
+
+@app.post("/api/dj/playlists")
+def api_playlist_create():
+    b = request.json or {}
+    pid = db.playlist_create(str(b.get("name") or "Neue Playlist"))
+    if b.get("uids"):
+        db.playlist_add(pid, list(b["uids"]))
+    return jsonify(next(p for p in db.playlists() if p["id"] == pid))
+
+
+@app.put("/api/dj/playlists/order")
+def api_playlist_order():
+    db.playlist_reorder((request.json or {}).get("ids") or [])
+    return jsonify(db.playlists())
+
+
+@app.patch("/api/dj/playlists/<int:pid>")
+def api_playlist_rename(pid):
+    if not db.playlist_exists(pid):
+        abort(404)
+    db.playlist_rename(pid, str((request.json or {}).get("name") or ""))
+    return jsonify(ok=True)
+
+
+@app.delete("/api/dj/playlists/<int:pid>")
+def api_playlist_delete(pid):
+    db.playlist_delete(pid)
+    return jsonify(ok=True)
+
+
+@app.post("/api/dj/playlists/<int:pid>/tracks")
+def api_playlist_add(pid):
+    if not db.playlist_exists(pid):
+        abort(404)
+    b = request.json or {}
+    idx = b.get("index")
+    return jsonify(items=db.playlist_add(pid, list(b.get("uids") or []), int(idx) if isinstance(idx, int) else None))
+
+
+@app.put("/api/dj/playlists/<int:pid>/tracks")
+def api_playlist_set(pid):
+    if not db.playlist_exists(pid):
+        abort(404)
+    return jsonify(items=db.playlist_set(pid, list((request.json or {}).get("uids") or [])))
+
+
 @app.post("/api/dj/import")
 def api_dj_import():
     paths = (request.json or {}).get("paths") or []
