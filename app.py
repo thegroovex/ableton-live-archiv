@@ -75,6 +75,9 @@ def index_set(path: str) -> int:
     )
     if not values.get("key_root"):
         values.pop("key_root", None); values.pop("key_mode", None); values.pop("key_source", None)
+        old = db.db().execute("SELECT id, key_source FROM projects WHERE path=?", (path,)).fetchone()
+        if old and old["key_source"] == "set":  # alte Standard-Tonart (C-Dur) aus früheren Scans entfernen
+            values.update(key_root=None, key_mode=None, key_source=None)
     from core.analyzer import guess_genre
     pid = db.upsert(values)
     p = db.get(pid)
@@ -133,7 +136,12 @@ def job_scan(roots):
 
 
 def _safe_name(pid, name):
-    return f"{pid:05d}_" + re.sub(r"[^\w\- ]+", "", name)[:60].strip()
+    """Nur ASCII im Exportnamen: AppleScript tippt ihn per Tastatur, Umlaute gehen dabei verloren."""
+    import unicodedata
+    for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("Ä", "Ae"), ("Ö", "Oe"), ("Ü", "Ue"), ("ß", "ss")):
+        name = unicodedata.normalize("NFC", name).replace(a, b)
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return f"{pid:05d}_" + re.sub(r"[^A-Za-z0-9\- ]+", "", name)[:60].strip()
 
 
 def job_render(ids, analyze_after=True):
