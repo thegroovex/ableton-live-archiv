@@ -4,6 +4,11 @@ import sys
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _files_exist(monkeypatch):
+    monkeypatch.setattr(renderer.os.path, "isfile", lambda p: True)
+
 from core import renderer
 
 
