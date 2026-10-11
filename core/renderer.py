@@ -87,7 +87,9 @@ def _dismiss_save_dialog() -> str:
             end try
             set {{wx, wy}} to position of w
             set {{ww, wh}} to size of w
-            if t is "" and ww > 400 and ww < 950 and wh > 120 and wh < 330 then
+            -- Größen in Punkten (Retina: halbe Pixel). Lives Sichern-Dialog ist ca. 330 x 100 pt.
+            -- Plug-in-Fenster heißen "1-Serum/…" und werden über den Bindestrich ausgeschlossen.
+            if t does not contain "-" and t does not contain "/" and ww > 220 and ww < 720 and wh > 60 and wh < 260 then
                 set frontmost to true
                 delay 0.2
                 click at {{(wx + ww * 0.15) as integer, (wy + wh * 0.8) as integer}}
