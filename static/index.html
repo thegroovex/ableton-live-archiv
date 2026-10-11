@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Live Archiv</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="logo"><i><b></b><b></b><b></b><b></b></i>LIVE ARCHIV</div>
+  <div class="tabs">
+    <div class="tab active" data-view="archive">Archiv</div>
+    <div class="tab" data-view="dj">DJ</div>
+  </div>
+  <input id="q" class="search" placeholder="Suchen: Name, Tags, Plug-ins, Notizen …" autocomplete="off">
+  <div class="spacer"></div>
+  <button class="btn" id="btn-scan" title="Ordner nach .als-Dateien durchsuchen">Scannen</button>
+  <button class="btn" id="btn-render-missing" title="Alle Projekte ohne MP3 in Live exportieren">MP3s rendern</button>
+  <button class="btn" id="btn-analyze" title="Tonart, Stimmung und Genre aus den MP3s bestimmen">Analysieren</button>
+  <button class="btn primary" id="btn-new">+ Neues Projekt</button>
+  <button class="btn" id="btn-settings" title="Einstellungen">⚙</button>
+</div>
+
+<!-- ============================================================ ARCHIV -->
+<div class="view active" id="view-archive">
+  <aside class="browser" id="sidebar">
+    <h4>Sammlungen</h4>
+    <div class="item sel" data-f="all">Alle Projekte <span class="n" id="n-all">0</span></div>
+    <div class="item" data-f="status=Fertig">Fertig <span class="n" id="n-fertig">0</span></div>
+    <div class="item" data-f="status=Skizze">Skizzen <span class="n" id="n-skizze">0</span></div>
+    <div class="item" data-f="mp3=no">Ohne MP3 <span class="n" id="n-nomp3">0</span></div>
+    <div class="item" data-f="rating=4">★ 4+ bewertet</div>
+    <h4>Tempo (BPM)</h4>
+    <div class="range"><input class="field" id="tmin" type="number" placeholder="von"> – <input class="field" id="tmax" type="number" placeholder="bis"></div>
+    <h4>Tonart</h4>
+    <div class="keys" id="keys"></div>
+    <div class="seg" id="modes"><button data-m="">Alle</button><button data-m="Dur">Dur</button><button data-m="Moll">Moll</button></div>
+    <h4>Genre</h4><div id="genres"></div>
+    <h4>Stimmung</h4><div id="moods"></div>
+  </aside>
+  <section class="main">
+    <div class="listhead">
+      <span id="count">0 Projekte</span><div class="spacer"></div>
+      <span>Sortieren:</span>
+      <select class="field" id="sort" style="width:150px">
+        <option value="mtime">Zuletzt geändert</option><option value="name">Name</option>
+        <option value="tempo">Tempo</option><option value="key">Tonart</option>
+        <option value="rating">Bewertung</option><option value="length">Länge</option><option value="status">Status</option>
+      </select>
+      <button class="btn small" id="btn-reset">Filter zurücksetzen</button>
+    </div>
+    <div class="tablewrap">
+      <table class="list" id="plist">
+        <thead><tr><th></th><th></th><th data-s="name">Name</th><th data-s="tempo">BPM</th><th data-s="key">Tonart</th><th>Genre</th><th>Stimmung</th><th data-s="status">Status</th><th data-s="length">Länge</th><th data-s="rating">★</th><th data-s="mtime">Geändert</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="empty" hidden>Noch keine Projekte. Lege in den Einstellungen deinen Projektordner fest und klicke auf „Scannen“.</div>
+    </div>
+  </section>
+  <aside class="detail" id="detail"><div class="empty">Wähle ein Projekt aus.</div></aside>
+</div>
+
+<!-- ============================================================ DJ -->
+<div class="view" id="view-dj">
+  <div class="decks">
+    <div class="deck a" id="deck-0"></div>
+    <div class="mixer" id="mixer"></div>
+    <div class="deck b" id="deck-1"></div>
+  </div>
+  <div class="listhead">
+    <span id="djcount">0 Tracks</span>
+    <span class="midi-status" id="midi-status">Kein Controller</span>
+    <div class="spacer"></div>
+    <select class="field" id="dj-src" style="width:140px"><option value="">Alle Quellen</option><option value="Live">Live-Renderings</option><option value="Import">Importiert</option></select>
+    <select class="field" id="dj-out" style="width:220px" title="Audio-Ausgang"><option value="">Standard-Ausgang</option></select>
+    <button class="btn small" id="btn-import">Ordner importieren</button>
+  </div>
+  <div class="djlib">
+    <div class="tablewrap" id="djdrop">
+      <table class="list" id="djlist">
+        <thead><tr><th>Titel</th><th>Artist</th><th>BPM</th><th>Tonart</th><th>Camelot</th><th>Genre</th><th>Länge</th><th>Quelle</th><th>Laden</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="dropzone" id="dropzone">Musikdateien hierher ziehen (MP3, WAV, AIFF, FLAC, M4A) – sie werden importiert und analysiert.</div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <span id="job-text">Bereit</span>
+  <div class="progress"><div id="job-bar"></div></div>
+  <button class="btn small" id="btn-cancel" hidden>Abbrechen</button>
+  <div class="spacer"></div>
+  <span id="lib-info"></span>
+</div>
+
+<!-- Dialoge -->
+<div class="modal" id="m-settings"><div class="dialog">
+  <header>Einstellungen</header>
+  <div class="body form" style="grid-template-columns:120px 1fr">
+    <label>Projektordner</label><textarea class="field" id="s-roots" rows="3" placeholder="Ein Pfad pro Zeile"></textarea>
+    <label>Live-App</label><input class="field" id="s-live">
+    <label>Vorlage (.als)</label><input class="field" id="s-template" placeholder="~/Music/Ableton/User Library/Templates/Default.als">
+    <label>Neue Projekte in</label><input class="field" id="s-newdir">
+  </div>
+  <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="s-save">Speichern</button></footer>
+</div></div>
+
+<div class="modal" id="m-new"><div class="dialog">
+  <header>Neues Projekt</header>
+  <div class="body form">
+    <label>Name</label><input class="field" id="n-name" placeholder="z. B. Nachtfahrt">
+    <label>Tempo</label><input class="field" id="n-tempo" type="number" step="0.1" value="124">
+    <label>Tonart</label><div style="display:flex;gap:4px"><select class="field" id="n-key"></select><select class="field" id="n-mode"><option>Moll</option><option>Dur</option></select></div>
+    <label>Genre</label><input class="field" id="n-genre" list="genre-list">
+    <label>Stimmung</label><input class="field" id="n-mood" list="mood-list">
+    <label>Tags</label><input class="field" id="n-tags" placeholder="durch Komma getrennt">
+    <label>Notizen</label><textarea class="field" id="n-notes" rows="2"></textarea>
+  </div>
+  <div class="body" id="n-error" style="color:var(--red);padding-top:0"></div>
+  <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="n-create">Anlegen & in Live öffnen</button></footer>
+</div></div>
+
+<div class="modal" id="m-import"><div class="dialog">
+  <header>Musik importieren</header>
+  <div class="body"><p>Ordner oder Datei-Pfad (z. B. <span class="mono">~/Music/DJ</span>). Unterordner werden mit eingelesen.</p>
+    <input class="field" id="i-path" placeholder="~/Music/DJ"></div>
+  <footer><button class="btn" data-close>Abbrechen</button><button class="btn primary" id="i-go">Importieren</button></footer>
+</div></div>
+
+<datalist id="genre-list"></datalist><datalist id="mood-list"></datalist>
+<script src="/static/js/common.js"></script>
+<script src="/static/js/archive.js"></script>
+<script src="/static/js/flx4.js"></script>
+<script src="/static/js/dj-logic.js"></script>
+<script src="/static/js/dj.js"></script>
+</body>
+</html>
