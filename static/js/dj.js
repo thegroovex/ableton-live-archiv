@@ -520,7 +520,7 @@ function visibleLib() {
   if (pl) { const by = new Map(DJ.lib.map(t => [t.uid, t])); list = pl.items.map(u => by.get(u)).filter(Boolean); }
   else list = DJ.lib.filter(t => DJ.view.type !== "src" || t.source === DJ.view.src);
   const q = ($("#dj-q")?.value || "").trim().toLowerCase();
-  if (q) list = list.filter(t => [t.title, t.artist, t.genre, keyLabel(t.key_root, t.key_mode), camelot(t.key_root, t.key_mode), t.bpm ? Math.round(t.bpm) : ""].join(" ").toLowerCase().includes(q));
+  if (q) list = list.filter(t => [t.title, t.artist, t.genre, t.mood, (t.tags || []).join(" "), t.notes, keyLabel(t.key_root, t.key_mode), camelot(t.key_root, t.key_mode), t.bpm ? Math.round(t.bpm) : ""].join(" ").toLowerCase().includes(q));
   return list;
 }
 
@@ -553,7 +553,7 @@ function renderLibrary() {
       <td data-noi18n>${esc(t.title)}</td><td class="wcol"><canvas class="mini" data-djmini="${t.uid}" width="320" height="44" title="Klick: auf das freie Deck laden"></canvas></td><td data-noi18n>${esc(t.artist)}</td><td class="mono">${t.bpm ? (+t.bpm).toFixed(1) : "–"}</td>
       <td class="mono">${keyLabel(t.key_root, t.key_mode)}</td><td class="mono" style="${fit ? "color:var(--green)" : ""}">${cam}${fit ? " ●" : ""}</td>
       <td>${esc(t.genre || "")}</td><td class="mono">${fmtTime(t.duration)}</td><td><span class="badge">${t.source}</span></td>
-      <td class="acts"><button class="btn small" data-load="0">A</button> <button class="btn small" data-load="1">B</button> <button class="btn small" data-addpl title="Zu Playlist hinzufügen">＋</button>${pl ? ` <button class="btn small" data-rm title="Aus Playlist entfernen (Entf)">✕</button>` : ""}</td></tr>`;
+      <td class="acts"><button class="btn small" data-load="0">A</button> <button class="btn small" data-load="1">B</button> <button class="btn small" data-addpl title="Zu Playlist hinzufügen">＋</button> <button class="btn small" data-tagedit title="Tags bearbeiten (⌘I)">✎</button>${pl ? ` <button class="btn small" data-rm title="Aus Playlist entfernen (Entf)">✕</button>` : ""}</td></tr>`;
   }).join("");
   $("#djempty").hidden = list.length > 0;
   $("#djempty").textContent = pl ? "Diese Playlist ist leer. Ziehe Tracks aus „Alle Tracks“ auf die Playlist links oder nutze ＋ in der Trackliste." : "Keine Tracks gefunden.";
@@ -594,6 +594,7 @@ $("#djlist tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr"); if (!tr) return;
   const i = +tr.dataset.i, uid = tr.dataset.uid, list = visibleLib();
   if (e.target.closest("[data-addpl]")) { DJ.sel = i; if (!DJ.selUids.has(uid)) DJ.selUids.clear(); return playlistMenu(e.target.closest("[data-addpl]"), selectedUids()); }
+  if (e.target.closest("[data-tagedit]")) { DJ.sel = i; if (!DJ.selUids.has(uid)) DJ.selUids.clear(); renderLibrary(); return openTagEditor(selectedUids()); }
   if (e.target.closest("[data-rm]")) { DJ.sel = i; if (!DJ.selUids.has(uid)) DJ.selUids.clear(); return removeFromPlaylist(selectedUids()); }
   if (e.metaKey || e.ctrlKey) { if (!DJ.selUids.size && list[DJ.sel]) DJ.selUids.add(list[DJ.sel].uid); DJ.selUids.has(uid) ? DJ.selUids.delete(uid) : DJ.selUids.add(uid); }
   else if (e.shiftKey) { const [a, b] = [Math.min(DJ.sel, i), Math.max(DJ.sel, i)]; DJ.selUids = new Set(list.slice(a, b + 1).map(t => t.uid)); }
@@ -751,8 +752,114 @@ document.addEventListener("keydown", e => {
 });
 
 // Import: Ordner-Pfad oder Drag & Drop
-$("#btn-import").onclick = () => openModal("#m-import");
-$("#i-go").onclick = async () => { await api("/api/dj/import", { method: "POST", body: { paths: [$("#i-path").value] } }); closeModals(); };
+// Ordner-Browser: der Browser selbst kennt keine Pfade, deshalb listet der Server die Ordner.
+const FS = { path: localStorage.getItem("dj.importDir") || "~" };
+async function fsOpen(path) {
+  const r = await api("/api/fs/list?path=" + encodeURIComponent(path || "~"));
+  FS.path = r.path; FS.parent = r.parent;
+  $("#i-path").value = r.path;
+  $("#fs-up").disabled = !r.parent;
+  $("#fs-places").innerHTML = r.places.map(p => `<div class="fs-place${r.path === p.path ? " sel" : ""}" data-fs="${esc(p.path)}">${esc(p.label)}</div>`).join("");
+  $("#fs-list").innerHTML = (r.error ? `<div class="fs-empty">${esc(r.error)}</div>` : "") +
+    r.dirs.map(d => `<div class="fs-row dir" data-fs="${esc(d.path)}"><span class="fi">📁</span>${esc(d.name)}</div>`).join("") +
+    r.files.map(f => `<div class="fs-row file"><span class="fi">♪</span>${esc(f)}</div>`).join("") +
+    (!r.dirs.length && !r.files.length && !r.error ? `<div class="fs-empty">Dieser Ordner ist leer.</div>` : "");
+  $("#fs-info").textContent = r.file_count
+    ? `${r.file_count} Audiodateien in diesem Ordner${r.already ? `, davon ${r.already} schon importiert` : ""} – Unterordner werden mit eingelesen.`
+    : "Keine Audiodateien direkt in diesem Ordner – Unterordner werden mit eingelesen.";
+  $("#fs-list").scrollTop = 0;
+}
+$("#btn-import").onclick = () => { openModal("#m-import"); fsOpen(FS.path).catch(() => fsOpen("~")); };
+$("#fs-up").onclick = () => FS.parent && fsOpen(FS.parent);
+$("#i-path").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") fsOpen($("#i-path").value); });
+$("#m-import").addEventListener("click", e => { const el = e.target.closest("[data-fs]"); if (el) fsOpen(el.dataset.fs); });
+$("#i-go").onclick = async () => {
+  localStorage.setItem("dj.importDir", FS.path);
+  await api("/api/dj/import", { method: "POST", body: { paths: [FS.path] } }); closeModals();
+};
+
+// Analyse im DJ-Tab: markierte Tracks, alle fehlenden oder alle neu
+$("#btn-dj-analyze").onclick = e => {
+  e.stopPropagation();
+  const sel = selectedUids(), missing = DJ.lib.filter(t => !t.analyzed).length;
+  $("#pl-menu")?.remove();
+  const m = document.createElement("div"); m.id = "pl-menu"; m.className = "pl-menu";
+  m.innerHTML = `<div class="pm-h">Analysieren</div>
+    <div class="pm-i" data-an="sel">Markierte Tracks <span class="n">${sel.length}</span></div>
+    <div class="pm-i" data-an="missing">Alle noch nicht analysierten <span class="n">${missing}</span></div>
+    <div class="pm-i" data-an="all">Ganze Bibliothek neu <span class="n">${DJ.lib.length}</span></div>`;
+  document.body.appendChild(m);
+  const r = e.target.getBoundingClientRect();
+  m.style.left = Math.min(innerWidth - 230, r.left) + "px"; m.style.top = (r.bottom + 4) + "px";
+  m.onclick = async ev => {
+    const it = ev.target.closest("[data-an]"); if (!it) return; m.remove();
+    const mode = it.dataset.an;
+    if (mode === "all" && !confirm(`Alle ${DJ.lib.length} Tracks neu analysieren? Von dir geänderte Werte bleiben erhalten.`)) return;
+    try {
+      const res = await api("/api/dj/analyze", { method: "POST", body: mode === "sel" ? { uids: sel } : { mode } });
+      toast(res.count ? `Analyse gestartet: ${res.count} Tracks` : "Nichts zu analysieren");
+    } catch (err) { toast(err.message); }
+  };
+  setTimeout(() => document.addEventListener("click", function off(ev) { if (!m.contains(ev.target)) { m.remove(); document.removeEventListener("click", off); } }), 0);
+};
+
+// Tag-Editor (wie im Archiv), auch für mehrere Tracks auf einmal
+const TAG_FIELDS = ["title", "artist", "bpm", "key_root", "key_mode", "genre", "mood", "tags", "notes"];
+const MIXED = "‹verschieden›";
+let tagEdit = null;
+function openTagEditor(uids) {
+  const tracks = uids.map(u => DJ.lib.find(t => t.uid === u)).filter(Boolean);
+  if (!tracks.length) return toast("Erst einen Track markieren");
+  const val = (t, k) => k === "tags" ? (t.tags || []).join(", ") : k === "bpm" ? (t.bpm ? +(+t.bpm).toFixed(2) : "") : (t[k] ?? "");
+  tagEdit = { uids: tracks.map(t => t.uid), start: {}, rating: null };
+  $("#t-head").textContent = tracks.length > 1 ? `Tags bearbeiten · ${tracks.length} Tracks` : `Tags bearbeiten · ${tracks[0].title}`;
+  $('[data-t="key_root"]').innerHTML = `<option value=""></option>` + NOTES.map(n => `<option value="${n}">${n}</option>`).join("");
+  for (const k of TAG_FIELDS) {
+    const el = $(`[data-t="${k}"]`), vals = [...new Set(tracks.map(t => String(val(t, k))))];
+    const same = vals.length === 1;
+    tagEdit.start[k] = same ? vals[0] : null;
+    if (el.tagName === "SELECT") { el.value = same ? vals[0] : ""; if (!same) el.dataset.mixed = "1"; else delete el.dataset.mixed; }
+    else { el.value = same ? vals[0] : ""; el.placeholder = same ? (k === "tags" ? "durch Komma getrennt" : "") : MIXED; }
+  }
+  const onlyLive = tracks.every(t => t.kind === "p");
+  $('[data-t="artist"]').disabled = onlyLive;
+  $("#t-file-row").hidden = !tracks.some(t => t.kind === "i");
+  $("#t-file").checked = localStorage.getItem("dj.writeTags") === "1";
+  const ratings = [...new Set(tracks.map(t => t.rating || 0))];
+  tagEdit.startRating = ratings.length === 1 ? ratings[0] : null;
+  const drawStars = r => { $("#t-rating").innerHTML = [1, 2, 3, 4, 5].map(i => `<span data-r="${i}" class="${(r || 0) >= i ? "on" : ""}">★</span>`).join("") + (r == null ? ` <small class="dim">${MIXED}</small>` : ""); };
+  drawStars(tagEdit.startRating);
+  $("#t-rating").onclick = e => { const s = e.target.closest("[data-r]"); if (!s) return; const r = +s.dataset.r; tagEdit.rating = (tagEdit.rating ?? tagEdit.startRating) === r ? 0 : r; drawStars(tagEdit.rating); };
+  $("#t-hint").textContent = onlyLive ? "Live-Renderings: Titel und Werte landen im Archiv (gleiche Daten wie im Archiv-Tab)." :
+    tracks.length > 1 ? "Leere Felder mit ‹verschieden› bleiben bei jedem Track, wie sie sind." : "";
+  openModal("#m-tags");
+  setTimeout(() => $('[data-t="title"]').focus(), 50);
+}
+$("#t-save").onclick = async () => {
+  if (!tagEdit) return;
+  const values = {};
+  for (const k of TAG_FIELDS) {
+    const el = $(`[data-t="${k}"]`); if (el.disabled) continue;
+    const v = el.value.trim(), start = tagEdit.start[k];
+    if (start == null ? v !== "" : v !== start) values[k] = v;
+  }
+  if ("key_root" in values && !("key_mode" in values)) values.key_mode = $('[data-t="key_mode"]').value;
+  if (tagEdit.rating != null && tagEdit.rating !== tagEdit.startRating) values.rating = tagEdit.rating;
+  localStorage.setItem("dj.writeTags", $("#t-file").checked ? "1" : "0");
+  if (!Object.keys(values).length) return closeModals();
+  const r = await api("/api/dj/tags", { method: "PATCH", body: { uids: tagEdit.uids, values, write_file: $("#t-file").checked } });
+  closeModals();
+  if (r.failed?.length) alert("Nicht in die Datei geschrieben:\n" + r.failed.join("\n"));
+  else toast(r.written ? `Gespeichert, ${r.written} Datei(en) aktualisiert` : "Tags gespeichert");
+  await loadLibrary();
+  DJ.decks.forEach(d => { if (d.track) { const nt = DJ.lib.find(t => t.uid === d.track.uid); if (nt) { Object.assign(d.track, nt, { grid_offset: d.track.grid_offset }); d.render?.(); } } });
+};
+$("#m-tags").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") $("#t-save").click(); });
+$("#btn-dj-tags").onclick = () => openTagEditor(selectedUids());
+document.addEventListener("keydown", e => {
+  if (!$("#view-dj").classList.contains("active") || e.target.matches("input, textarea, select")) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "i") { e.preventDefault(); openTagEditor(selectedUids()); }
+});
 const dz = $("#djdrop");
 dz.addEventListener("dragover", e => { if (!hasType(e, "Files")) return; e.preventDefault(); $("#dropzone").classList.add("hover"); });
 dz.addEventListener("dragleave", () => $("#dropzone").classList.remove("hover"));
