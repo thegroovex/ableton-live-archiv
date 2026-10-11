@@ -88,6 +88,7 @@ async function select(id) {
       <button class="btn small" id="d-reveal">Im Finder zeigen</button>
       <button class="btn small" id="d-render">${p.mp3_path ? "Neu rendern" : "MP3 rendern"}</button>
       ${p.mp3_path ? `<button class="btn small" id="d-analyze">Analysieren</button>` : ""}
+      <button class="btn small danger" id="d-remove" title="Die .als-Datei bleibt erhalten">Aus Liste entfernen</button>
     </div>
     <div class="stats">
       <div class="stat"><b>${p.tempo ? (+p.tempo).toFixed(1) : "–"}</b><span>BPM</span></div>
@@ -121,6 +122,12 @@ async function select(id) {
   $("#d-reveal").onclick = () => api(`/api/reveal/${id}`, { method: "POST" });
   $("#d-render").onclick = () => api("/api/render", { method: "POST", body: { ids: [id] } }).catch(e => alert(e.message));
   if ($("#d-analyze")) $("#d-analyze").onclick = () => api("/api/analyze", { method: "POST", body: { ids: [id] } });
+  $("#d-remove").onclick = async () => {
+    if (!confirm(`„${p.name}“ aus der Liste entfernen?\n\nDie Ableton-Datei bleibt erhalten, ein neuer Scan holt das Projekt nicht zurück.`)) return;
+    try { await api(`/api/projects/${id}`, { method: "DELETE" }); } catch (e) { return alert(e.message); }
+    $("#detail").innerHTML = `<div class="empty">Wähle ein Projekt aus.</div>`;
+    loadProjects(); loadFacets();
+  };
   if (p.mp3_path) loadDetailWave(id);
 }
 
@@ -175,6 +182,10 @@ $("#btn-settings").onclick = async () => {
   const s = await api("/api/settings");
   $("#s-roots").value = s.roots.join("\n"); $("#s-live").value = s.live_app; $("#s-template").value = s.template; $("#s-newdir").value = s.new_project_dir;
   openModal("#m-settings");
+};
+if ($("#s-unhide")) $("#s-unhide").onclick = async () => {
+  const r = await api("/api/hidden/clear", { method: "POST" });
+  alert(`${r.restored} entfernte Projekte kommen beim nächsten Scan zurück.`);
 };
 $("#s-save").onclick = async () => {
   await api("/api/settings", { method: "POST", body: { roots: $("#s-roots").value.split("\n").map(s => s.trim()).filter(Boolean), live_app: $("#s-live").value, template: $("#s-template").value, new_project_dir: $("#s-newdir").value } });
