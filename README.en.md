@@ -28,6 +28,8 @@ All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/relea
 - Two decks with scrolling waveform, beatgrid, overview, hot cues (8 per deck, saved), beat loops, loop in/out, beat jump, sync (incl. phase), tempo ±6/10/16/50 %, scratching and nudging.
 - Scrolling waveform: drag to move (Shift = fine), mouse wheel or ＋/－ to zoom (1–32 s), double-click sets the cue.
 - **Import with folder browser:** click through folders (home, Music, Downloads, external volumes or Windows drives) or type a path; subfolders are included.
+- **Repitch / Keep Pitch** per deck: tempo changes the pitch like vinyl, or the pitch stays the same (pitch-independent time-stretching). ♭/♯ additionally transposes a deck in semitones; the sounding key with its Camelot code is shown next to it.
+- **Key Sync:** with KEY SYNC on, SYNC sets the pitch as well as the tempo – “=” to the same key (or relative key), “±” to the closest harmonically compatible one (Camelot ±1). Works in both modes and follows tempo changes automatically.
 - **Analyze in the DJ tab:** selected tracks, all not yet analyzed, or the whole library (BPM, key, genre, mood, waveform).
 - **Tag editor** (✎ or ⌘I / Ctrl+I): title, artist, BPM, key, genre, mood, tags, rating, notes – also for several tracks at once. Later analyses never overwrite your values; optionally title, artist, genre, BPM and key are written into the audio file (ID3/Vorbis/MP4). Search also finds tags and notes.
 - Beatgrid: automatic bar-1 detection (**AUTO** button), fine adjustment in ms, grid stays bar-aligned when the BPM changes.
