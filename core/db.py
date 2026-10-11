@@ -191,14 +191,14 @@ def dj_library() -> list[dict]:
         out.append(dict(uid=f"p{d['id']}", kind="p", id=d["id"], title=d["name"], artist="Live-Projekt",
                         bpm=d.get("tempo"), key_root=d.get("key_root"), key_mode=d.get("key_mode"),
                         genre=d.get("genre"), mood=d.get("mood"), status=d.get("status"),
-                        duration=d.get("length_sec"), grid_offset=d.get("grid_offset") or 0.0,
+                        duration=d.get("length_sec"), grid_offset=d.get("grid_offset"),
                         url=f"/audio/{d['id']}", source="Live"))
     for r in con.execute("SELECT * FROM imports ORDER BY added DESC"):
         d = dict(r)
         out.append(dict(uid=f"i{d['id']}", kind="i", id=d["id"], title=d["title"], artist=d.get("artist") or "",
                         bpm=d.get("bpm"), key_root=d.get("key_root"), key_mode=d.get("key_mode"),
                         genre=d.get("genre"), mood=None, status=None, duration=d.get("duration"),
-                        grid_offset=d.get("grid_offset") or 0.0, url=f"/audio/import/{d['id']}", source="Import"))
+                        grid_offset=d.get("grid_offset"), url=f"/audio/import/{d['id']}", source="Import"))
     return out
 
 
