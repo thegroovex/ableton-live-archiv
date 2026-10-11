@@ -84,3 +84,40 @@ test("Camelot-Kompatibilität", () => {
   assert.ok(L.camelotCompatible("8A", "8B"));
   assert.ok(!L.camelotCompatible("8A", "10A"));
 });
+
+test("Beatgrid: Einrasten, Downbeat, Takt", () => {
+  near(L.snapToBeat(1.26, 120, 0), 1.5);
+  near(L.snapToBeat(1.26, 120, 0, "floor"), 1.0);
+  near(L.gridFromDownbeat(10.1, 120), 0.1);
+  near(L.normGrid(-0.1, 120), 0.4);
+  assert.deepEqual(L.barBeat(2.6, 120, 0), { index: 5, beat: 2, bar: 2 });
+});
+
+test("Tap-Tempo", () => {
+  assert.equal(L.tapTempo([0, 0.5, 1.0]), 0);
+  assert.equal(L.tapTempo([0, 0.5, 1.0, 1.5, 2.0]), 120);
+  assert.equal(L.tapTempo([0, 0.5, 5, 5.48, 5.96, 6.44]), 125);   // Pause startet neu
+});
+
+test("CDJ-Loops: halbieren, verdoppeln, verschieben, Label", () => {
+  assert.deepEqual(L.loopHalve({ start: 1, end: 3 }), { start: 1, end: 2 });
+  assert.deepEqual(L.loopDouble({ start: 1, end: 3 }), { start: 1, end: 5 });
+  assert.deepEqual(L.loopMove({ start: 2, end: 4 }, -1), { start: 0, end: 2 });
+  assert.equal(L.loopBeats({ start: 0, end: 2 }, 120), 4);
+  assert.equal(L.loopLabel(0.25), "1/4");
+  assert.equal(L.loopLabel(16), "16");
+});
+
+test("Phasenversatz für die Beatmatch-Anzeige", () => {
+  near(L.phaseOffset(0.1, 120, 0, 0, 120, 0), 0.2);
+  near(L.phaseOffset(0.45, 120, 0, 0, 120, 0), -0.1);
+});
+
+test("Tastatur: Codes und Modifier", () => {
+  assert.equal(L.keyEvent("KeyQ").action, "play");
+  assert.equal(L.keyEvent("KeyY").deck, 1);                       // Z auf deutscher Tastatur
+  assert.deepEqual(L.keyEvent("KeyR", { shift: true }), { deck: 0, action: "beatjump", beats: -4 });
+  assert.equal(L.keyEvent("KeyT", { alt: true }).step, 0.0005);
+  assert.equal(L.keyEvent("Digit2", { shift: true }).clear, true);
+  assert.equal(L.keyEvent("KeyZ"), null);
+});
