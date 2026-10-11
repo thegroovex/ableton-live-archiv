@@ -10,6 +10,7 @@
     detail:  { min: 240, max: 720, def: 340 },   // Archiv: Detailansicht rechts
     mixer:   { min: 170, max: 420, def: 230 },   // DJ: Mixer-Breite
     deckA:   { min: 0.2, max: 0.8, def: 0.5 },   // DJ: Anteil Deck A an (A+B)
+    crates:  { min: 130, max: 420, def: 200 },   // DJ: Crates-Spalte
     decks:   { min: 220, max: 0.85, def: null },  // DJ: Höhe Decks (null = automatisch); max als Anteil der View
   };
 
@@ -40,6 +41,7 @@
     const fa = state.deckA ?? LIMITS.deckA.def;
     set(dj, "--deck-a", fa.toFixed(4) + "fr");
     set(dj, "--deck-b", (1 - fa).toFixed(4) + "fr");
+    set(dj, "--crates-w", state.crates != null ? state.crates + "px" : null);
     set(dj, "--decks-h", state.decks != null ? state.decks + "px" : null);
     dj?.classList.toggle("decks-sized", state.decks != null);
   }
@@ -107,6 +109,12 @@
       // Rechte Leiste: Mixerbreite
       bind(g4, "mixer", "x", 1, () => ({ start: mixer.getBoundingClientRect().width, container: 0 }));
       bind(g5, "decks", "y", 1, () => ({ start: decks.getBoundingClientRect().height, container: $("#view-dj").getBoundingClientRect().height }));
+    }
+    const crates = $("#crates");
+    if (crates) {
+      const g6 = gutter("v", "Breite der Crates");
+      crates.after(g6);
+      bind(g6, "crates", "x", 1, () => ({ start: crates.getBoundingClientRect().width, container: 0 }));
     }
     apply();
 
