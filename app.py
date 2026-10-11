@@ -95,12 +95,20 @@ def job_scan(roots):
     if not paths:
         JOB.write("Keine .als-Dateien gefunden. Stimmt der Pfad unter ⚙?")
     new = 0
+    matched = []
+    from core.matcher import find_existing_audio
     for p in paths:
         if JOB.cancel:
             break
         try:
             new += p not in known
-            index_set(p)
+            pid = index_set(p)
+            row = db.get(pid)
+            if not row.get("mp3_path") or not os.path.exists(row["mp3_path"]):
+                audio = find_existing_audio(p)
+                if audio:
+                    db.update(pid, {"mp3_path": audio, "error": None})
+                    matched.append(pid)
             JOB.write(f"Gelesen: {os.path.basename(p)}")
         except Exception as exc:
             JOB.write(f"{os.path.basename(p)}: {exc}")
@@ -110,7 +118,18 @@ def job_scan(roots):
         if not os.path.exists(g):
             db.db().execute("UPDATE projects SET missing=1 WHERE path=?", (g,))
     db.db().commit()
-    JOB.write(f"Scan abgeschlossen: {len(paths)} Sets, davon {new} neu.")
+    if matched:
+        JOB.write(f"{len(matched)} vorhandene Exporte zugeordnet, analysiere …")
+        JOB.done, JOB.total = 0, len(matched)
+        for pid in matched:
+            if JOB.cancel:
+                break
+            try:
+                _analyze(pid)
+            except Exception as exc:
+                JOB.write(f"#{pid}: {exc}")
+            JOB.done += 1
+    JOB.write(f"Scan abgeschlossen: {len(paths)} Sets, davon {new} neu, {len(matched)} vorhandene MP3s zugeordnet.")
 
 
 def _safe_name(pid, name):
