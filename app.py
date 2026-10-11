@@ -256,6 +256,20 @@ def api_peaks(pid):
     return jsonify({k: data[k] for k in ("amp", "low", "mid", "high", "duration")})
 
 
+@app.get("/api/peaks/import/<int:iid>")
+def api_peaks_import(iid):
+    """Mini-Waveform für importierte Tracks im DJ-Tab."""
+    from core import peaks
+    t = db.get_import(iid)
+    if not t or not t.get("path") or not os.path.exists(t["path"]):
+        return jsonify(error="kein Audio"), 404
+    try:
+        data = peaks.cached(t["path"], db.PEAKS_DIR, f"i{iid}")
+    except Exception as exc:
+        return jsonify(error=str(exc)), 500
+    return jsonify({k: data[k] for k in ("amp", "low", "mid", "high", "duration")})
+
+
 @app.delete("/api/projects/<int:pid>")
 def api_remove(pid):
     if JOB.running:
@@ -412,7 +426,7 @@ def analyze_import(iid):
     if a.get("error"):
         JOB.write(a["error"]); return
     db.update_import(iid, dict(bpm=a["tempo_audio"], key_root=a["key_root"], key_mode=a["key_mode"],
-                               duration=a["duration"], grid_offset=a["grid_offset"], energy=a["energy"],
+                               duration=a["duration"], energy=a["energy"],  # Beatgrid erkennt der DJ-Tab genauer selbst
                                genre=guess_genre(a["tempo_audio"], a["energy"], a["onset_rate"]),
                                analyzed_at=time.time()))
 
