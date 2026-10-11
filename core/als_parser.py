@@ -193,11 +193,23 @@ def set_tempo_and_key(src: str, dst: str, tempo: float | None, key_root: str | N
         fh.write(xml.encode("utf-8"))
 
 
+def clean_path(p: str) -> str:
+    """Macht kopierte Pfade nutzbar: file://-URLs, %20, Anführungszeichen, \\-Leerzeichen, ~."""
+    from urllib.parse import unquote
+    p = (p or "").strip().strip('"').strip("'")
+    if p.startswith("file://"):
+        p = p[7:]
+    if "%" in p:
+        p = unquote(p)
+    p = p.replace("\\ ", " ")
+    return os.path.expanduser(p).rstrip("/") or "/"
+
+
 def find_sets(roots: list[str]) -> list[str]:
     """Findet alle .als-Dateien, ignoriert Backup-Ordner."""
     found = []
     for root in roots:
-        root = os.path.expanduser(root)
+        root = clean_path(root)
         for dirpath, dirnames, filenames in os.walk(root):
             dirnames[:] = [d for d in dirnames if d not in ("Backup", ".Trash") and not d.startswith(".")]
             for f in filenames:
