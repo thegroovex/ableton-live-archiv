@@ -47,7 +47,7 @@ async function loadProjects() {
     <tr data-id="${p.id}" class="${A.sel === p.id ? "sel" : ""}">
       <td><span class="chip" style="background:${p.color || colorFor(p.genre)}"></span></td>
       <td>${p.mp3_path ? `<button class="play" data-play="${p.id}">${A.playing === p.id ? "❚❚" : "▶"}</button>` : ""}</td>
-      <td title="${esc(p.path)}">${esc(p.name)}${p.error ? ' <span title="' + esc(p.error) + '" style="color:var(--red)">●</span>' : ""}</td>
+      <td title="${esc(p.path)}" data-noi18n>${esc(p.name)}${p.error ? ' <span title="' + esc(p.error) + '" style="color:var(--red)">●</span>' : ""}</td>
       <td class="wcol">${p.mp3_path ? `<canvas class="mini" data-mini="${p.id}" width="320" height="44"></canvas>` : ""}</td>
       <td class="mono">${p.tempo ? (+p.tempo).toFixed(1) : "–"}</td>
       <td class="mono">${keyLabel(p.key_root, p.key_mode)} <span style="color:var(--dim)">${camelot(p.key_root, p.key_mode)}</span></td>
@@ -119,8 +119,8 @@ async function select(id) {
   const p = await api(`/api/projects/${id}`);
   const tracks = (p.tracks_audio || 0) + (p.tracks_midi || 0);
   $("#detail").innerHTML = `
-    <h2>${esc(p.name)}</h2>
-    <div class="path">${esc(p.path)}</div>
+    <h2 data-noi18n>${esc(p.name)}</h2>
+    <div class="path" data-noi18n>${esc(p.path)}</div>
     ${p.mp3_path ? `<canvas id="dwave"></canvas>` : `<div class="empty" style="padding:14px;border:1px dashed #444">Noch kein MP3 gerendert</div>`}
     <div class="actions">
       <button class="btn small primary" id="d-open">In Live öffnen</button>
@@ -138,10 +138,10 @@ async function select(id) {
       <div class="stat"><b>${p.energy != null ? Math.round(p.energy * 100) : "–"}</b><span>Energie</span></div>
     </div>
     <div class="form">
-      <label>Status</label><select class="field" data-e="status"><option>Skizze</option><option>Fertig</option></select>
+      <label>Status</label><select class="field" data-e="status"><option value="Skizze">Skizze</option><option value="Fertig">Fertig</option></select>
       <label>Genre</label><input class="field" data-e="genre" list="genre-list">
       <label>Stimmung</label><input class="field" data-e="mood" list="mood-list">
-      <label>Tonart</label><div style="display:flex;gap:4px"><select class="field" data-e="key_root"><option value=""></option>${NOTES.map(n => `<option>${n}</option>`).join("")}</select><select class="field" data-e="key_mode"><option value=""></option><option>Dur</option><option>Moll</option></select></div>
+      <label>Tonart</label><div style="display:flex;gap:4px"><select class="field" data-e="key_root"><option value=""></option>${NOTES.map(n => `<option>${n}</option>`).join("")}</select><select class="field" data-e="key_mode"><option value=""></option><option value="Dur">Dur</option><option value="Moll">Moll</option></select></div>
       <label>Tempo</label><input class="field" data-e="tempo" type="number" step="0.01">
       <label>Tags</label><input class="field" data-e="tags" placeholder="durch Komma getrennt">
       <label>Bewertung</label><div class="rating">${[1, 2, 3, 4, 5].map(i => `<span data-r="${i}" class="${(p.rating || 0) >= i ? "on" : ""}">★</span>`).join("")}</div>
@@ -219,6 +219,7 @@ $("#btn-analyze").onclick = () => api("/api/analyze", { method: "POST", body: {}
 
 $("#btn-settings").onclick = async () => {
   const s = await api("/api/settings");
+  $("#s-lang").value = localStorage.getItem("lang") || "";
   $("#s-roots").value = s.roots.join("\n"); $("#s-live").value = s.live_app; $("#s-template").value = s.template; $("#s-newdir").value = s.new_project_dir;
   openModal("#m-settings");
 };
@@ -228,6 +229,7 @@ if ($("#s-unhide")) $("#s-unhide").onclick = async () => {
 };
 $("#s-save").onclick = async () => {
   await api("/api/settings", { method: "POST", body: { roots: $("#s-roots").value.split("\n").map(s => s.trim()).filter(Boolean), live_app: $("#s-live").value, template: $("#s-template").value, new_project_dir: $("#s-newdir").value } });
+  if (($("#s-lang").value || "") !== (localStorage.getItem("lang") || "")) { api("/api/settings", { method: "POST", body: { lang: $("#s-lang").value } }); setLang($("#s-lang").value); }
   closeModals();
 };
 $("#btn-new").onclick = () => { $("#n-error").textContent = ""; openModal("#m-new"); $("#n-name").focus(); };
