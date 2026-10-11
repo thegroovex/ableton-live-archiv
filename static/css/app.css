@@ -216,3 +216,38 @@ body.resizing-y, body.resizing-y * { cursor: row-resize !important; }
 .zoomlbl { font-family: var(--mono); font-size: 10px; color: var(--dim); min-width: 34px; text-align: center; }
 #view-dj.decks-sized .zoomwrap { flex: 1 1 90px; min-height: 40px; display: flex; }
 #view-dj.decks-sized .zoomwrap canvas.zoom { flex: 1; height: auto; min-height: 0; }
+
+/* DJ: Crates/Playlists – Aufbau wie Serato DJ Pro (Crates links, Trackliste rechts) */
+.crates { width: var(--crates-w, 200px); flex-shrink: 0; background: #1d1d1d; overflow: auto; padding-bottom: 8px; }
+.crates-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: var(--panel2); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 1;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 600; }
+.crates h4 { margin: 10px 10px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .12em; color: var(--dim); font-weight: 600; }
+.crate { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 10px; cursor: pointer; border-left: 2px solid transparent; }
+.crate:hover { background: #2a2a2a; }
+.crate.sel { background: #33302a; border-left-color: var(--accent); color: #fff; }
+.crate .ci { width: 14px; text-align: center; color: var(--accent); font-size: 11px; }
+.crate .cn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crate .n { color: var(--dim); font-family: var(--mono); font-size: 10px; }
+.crate .cx { display: none; background: none; border: 0; color: var(--dim); cursor: pointer; padding: 0 2px; font-size: 10px; }
+.crate:hover .cx { display: inline; }
+.crate .cx:hover { color: var(--red); }
+.crate.drop, #pl-add.drop { outline: 1px dashed var(--accent); background: #3a2e1c; }
+.crate-edit { padding: 1px 4px !important; flex: 1; }
+.crate-empty { color: var(--dim); font-size: 11px; padding: 6px 12px; line-height: 1.4; }
+.dj-search { width: 260px; }
+#djlist .num { width: 34px; text-align: right; color: var(--dim); }
+#djlist:not(.in-pl) .num { display: none; }
+#djlist tr.cursor td:first-child, #djlist tr.cursor td:nth-child(2) { box-shadow: inset 2px 0 0 var(--accent); }
+#djlist:not(.in-pl) tr.cursor td:nth-child(2) { box-shadow: inset 2px 0 0 var(--accent); }
+#djlist tr.loaded td:nth-child(2) { color: var(--green); }
+#djlist tr.drop-before td { box-shadow: inset 0 2px 0 var(--accent); }
+#djlist tr.drop-after td { box-shadow: inset 0 -2px 0 var(--accent); }
+#djlist td.acts { white-space: nowrap; }
+#djlist tbody tr { cursor: default; }
+.pl-menu { position: fixed; z-index: 95; width: 220px; max-height: 260px; overflow: auto; background: var(--panel2); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.6); }
+.pl-menu .pm-h { padding: 6px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--dim); background: var(--panel3); }
+.pl-menu .pm-i { padding: 5px 10px; cursor: pointer; display: flex; gap: 6px; }
+.pl-menu .pm-i .n { margin-left: auto; color: var(--dim); font-family: var(--mono); font-size: 10px; }
+.pl-menu .pm-i:hover { background: var(--accent-dim); color: #fff; }
+.pl-menu .pm-new { color: var(--accent); border-top: 1px solid var(--line); }
+.drag-ghost { position: fixed; top: -100px; left: -100px; padding: 4px 10px; background: var(--accent); color: #111; font-weight: 600; border-radius: 2px; }
