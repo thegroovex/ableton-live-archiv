@@ -11,13 +11,25 @@ MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.
 
 
 def analyze_audio(path: str, max_seconds: float = 120.0) -> dict:
+    import warnings
+    with warnings.catch_warnings():  # librosa/numpy-Hinweise nicht ins Terminal schreiben
+        warnings.simplefilter("ignore")
+        with np.errstate(all="ignore"):
+            return _analyze(path, max_seconds)
+
+
+def _analyze(path: str, max_seconds: float) -> dict:
+    import os
     import librosa  # erst hier laden, Start bleibt schnell
 
     duration = librosa.get_duration(path=path)
     offset = max(0.0, (duration - max_seconds) / 2) if duration > max_seconds else 0.0
     y, sr = librosa.load(path, sr=22050, mono=True, offset=offset, duration=max_seconds)
-    if y.size == 0:
-        return {"error": "Leere Audiodatei"}
+    name = os.path.basename(path)
+    if y.size < sr * 3:
+        return {"error": f"{name}: zu kurz für eine Analyse (unter 3 s), übersprungen"}
+    if float(np.sqrt(np.mean(y ** 2))) < 1e-4:
+        return {"error": f"{name}: stumm, übersprungen"}
 
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
     tempo = float(np.atleast_1d(tempo)[0])
@@ -32,7 +44,7 @@ def analyze_audio(path: str, max_seconds: float = 120.0) -> dict:
     for i in range(12):
         for profile, mode in ((MAJOR, "Dur"), (MINOR, "Moll")):
             r = float(np.corrcoef(np.roll(profile, i), chroma)[0, 1])
-            if r > best[0]:
+            if np.isfinite(r) and r > best[0]:
                 best = (r, NOTE_NAMES[i], mode)
 
     rms = float(np.sqrt(np.mean(y ** 2)))
