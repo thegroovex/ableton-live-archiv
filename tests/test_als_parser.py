@@ -24,7 +24,8 @@ def test_arrangement_length_from_clips(tmp_path, make_set):
 
 
 def test_major_key_and_out_of_key(tmp_path, make_set):
-    assert parse_set(make_set(str(tmp_path / "m.als"), root=0, scale="Major")).key_mode == "Dur"
+    assert parse_set(make_set(str(tmp_path / "m.als"), root=7, scale="Major")).key_mode == "Dur"
+    assert parse_set(make_set(str(tmp_path / "c.als"), root=0, scale="Major")).key_root is None  # Live-Standard
     assert parse_set(make_set(str(tmp_path / "d.als"), root=2, scale="Dorian")).key_mode == "Moll"
     assert parse_set(make_set(str(tmp_path / "n.als"), in_key=False)).key_root is None
 
