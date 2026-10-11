@@ -72,16 +72,23 @@
     <span id="djcount">0 Tracks</span>
     <span class="midi-status" id="midi-status">Kein Controller</span>
     <div class="spacer"></div>
-    <select class="field" id="dj-src" style="width:140px"><option value="">Alle Quellen</option><option value="Live">Live-Renderings</option><option value="Import">Importiert</option></select>
+    <input class="field dj-search" id="dj-q" placeholder="🔍 Titel, Artist, BPM, Tonart … (⌘F)" autocomplete="off">
     <select class="field" id="dj-out" style="width:220px" title="Audio-Ausgang"><option value="">Standard-Ausgang</option></select>
     <button class="btn small" id="btn-import">Ordner importieren</button>
   </div>
   <div class="djlib">
+    <aside class="crates" id="crates">
+      <div class="crates-head"><span>Crates</span><button class="btn small" id="pl-add" title="Neue Playlist – oder Tracks hierher ziehen">+ Playlist</button></div>
+      <div id="crates-fixed"></div>
+      <h4>Playlists</h4>
+      <div id="pl-list"></div>
+    </aside>
     <div class="tablewrap" id="djdrop">
       <table class="list" id="djlist">
-        <thead><tr><th>Titel</th><th class="wcol">Waveform</th><th>Artist</th><th>BPM</th><th>Tonart</th><th>Camelot</th><th>Genre</th><th>Länge</th><th>Quelle</th><th>Laden</th></tr></thead>
+        <thead><tr><th class="num">#</th><th>Titel</th><th class="wcol">Waveform</th><th>Artist</th><th>BPM</th><th>Tonart</th><th>Camelot</th><th>Genre</th><th>Länge</th><th>Quelle</th><th>Aktion</th></tr></thead>
         <tbody></tbody>
       </table>
+      <div class="empty" id="djempty" hidden></div>
       <div class="dropzone" id="dropzone">Musikdateien hierher ziehen (MP3, WAV, AIFF, FLAC, M4A) – sie werden importiert und analysiert.</div>
     </div>
   </div>
