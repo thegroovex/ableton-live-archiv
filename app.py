@@ -246,6 +246,9 @@ def api_scan():
 @app.post("/api/render")
 def api_render():
     body = request.json or {}
+    if renderer.live_is_running():
+        return jsonify(started=False, error="Ableton Live ist noch offen. Bitte deine Sets speichern und Live beenden. "
+                                            "Live Archiv öffnet Live dann selbst und verwirft beim Wechsel nur Sets, die es selbst geöffnet hat."), 409
     ids = body.get("ids")
     if body.get("missing"):
         ids = [r["id"] for r in db.db().execute("SELECT id FROM projects WHERE missing=0 AND mp3_path IS NULL ORDER BY mtime DESC")]
