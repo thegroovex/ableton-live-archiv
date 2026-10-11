@@ -94,6 +94,20 @@ function drawOverview(canvas, peaks, color, progress = null, cues = [], bands = 
   cues.forEach((c, i) => { if (c == null) return; g.fillStyle = "#ff5f56"; g.fillRect(c * w, 0, 1.5 * dpr, h * 0.35); });
 }
 
+// Mini-Waveform (Listen in Archiv und DJ): Lautstärke + Farbe aus Bässen/Mitten/Höhen wie in Rekordbox
+function drawMiniWave(c, d, prog = -1) {
+  if (!c || !d || !d.amp || !d.amp.length) return;
+  const g = c.getContext("2d"), W = c.width, H = c.height, n = d.amp.length, bw = W / n, mid = H / 2;
+  g.clearRect(0, 0, W, H);
+  for (let i = 0; i < n; i++) {
+    const played = prog >= 0 && i / n <= prog;
+    g.fillStyle = Wave.bandColor(d.low[i], d.mid[i], d.high[i], played ? 0.45 : 1);
+    const h = Math.max(1, d.amp[i] * (H - 2));
+    g.fillRect(i * bw, mid - h / 2, Math.max(1, bw - 0.4), h);
+  }
+  if (prog >= 0) { g.fillStyle = "#fff"; g.fillRect(prog * W, 0, 2, H); }
+}
+
 // Kurze Einblendung unten rechts
 function toast(msg) {
   if (!msg) return;
