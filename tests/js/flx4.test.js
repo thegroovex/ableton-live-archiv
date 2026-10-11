@@ -50,3 +50,8 @@ test("LED-Ausgabe", () => {
   assert.deepEqual(FLX4.LED.hotcue(1, 2, true), [0x99, 2, 0x7F]);
   assert.deepEqual(FLX4.LED.vu(0, 2), [0xB0, 0x02, 127]);
 });
+
+test("CUE/LOOP CALL halbiert/verdoppelt den Loop", () => {
+  assert.equal(FLX4.decode(0x90, 0x51, 0x7F).action, "loopHalve");
+  assert.equal(FLX4.decode(0x91, 0x53, 0x7F).action, "loopDouble");
+});
