@@ -119,7 +119,7 @@ async function select(id) {
   $$("#detail [data-r]").forEach(s => s.onclick = () => save(id, { rating: +s.dataset.r === p.rating ? 0 : +s.dataset.r }).then(() => select(id)));
   $("#d-open").onclick = () => api(`/api/open/${id}`, { method: "POST" });
   $("#d-reveal").onclick = () => api(`/api/reveal/${id}`, { method: "POST" });
-  $("#d-render").onclick = () => api("/api/render", { method: "POST", body: { ids: [id] } });
+  $("#d-render").onclick = () => api("/api/render", { method: "POST", body: { ids: [id] } }).catch(e => alert(e.message));
   if ($("#d-analyze")) $("#d-analyze").onclick = () => api("/api/analyze", { method: "POST", body: { ids: [id] } });
   if (p.mp3_path) loadDetailWave(id);
 }
@@ -166,8 +166,8 @@ $("#btn-scan").onclick = async () => {
 $("#btn-render-missing").onclick = async () => {
   const n = +$("#n-nomp3").textContent;
   if (!n) return alert("Alle Projekte haben schon ein MP3.");
-  if (confirm(`${n} Projekte nacheinander in Live öffnen und als MP3 exportieren?\n\nWährend des Renderns bitte Maus und Tastatur nicht benutzen.`))
-    api("/api/render", { method: "POST", body: { missing: true } });
+  if (confirm(`${n} Projekte nacheinander in Live öffnen und als MP3 exportieren?\n\nLive muss dafür geschlossen sein. Während des Renderns bitte Maus und Tastatur nicht benutzen.`))
+    api("/api/render", { method: "POST", body: { missing: true } }).catch(e => alert(e.message));
 };
 $("#btn-analyze").onclick = () => api("/api/analyze", { method: "POST", body: {} });
 
