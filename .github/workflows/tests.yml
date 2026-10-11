@@ -1,0 +1,18 @@
+name: Tests (macOS)
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: pip install -r requirements.txt pytest
+      - name: Python-Tests (Parser, Datenbank, API, Audio-Analyse, AppleScript)
+        run: python -m pytest -v
+      - name: JavaScript-Tests (FLX4-Mapping, DJ-Logik, Audio-Engine)
+        run: node --test tests/js/*.test.js
+      - name: Syntax-Check Frontend
+        run: for f in static/js/*.js; do node --check "$f"; done
