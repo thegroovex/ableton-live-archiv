@@ -67,3 +67,28 @@ test("Hält am Ende an und meldet Position", () => {
   assert.equal(p.playing, false);
   assert.ok(p.sent.length > 0 && "pos" in p.sent[0]);
 });
+
+test("Master Tempo hält die Tonhöhe bei +8 % Tempo", () => {
+  const P = loadProcessor(), p = new P();
+  const sr = 48000, n = sr * 3, f = 440, L = new Float32Array(n);
+  for (let i = 0; i < n; i++) L[i] = Math.sin(2 * Math.PI * f * i / sr);
+  p.onMsg({ type: "load", L, sampleRate: sr });
+  p.onMsg({ type: "rate", value: 1.08 }); p.onMsg({ type: "keylock", value: true }); p.onMsg({ type: "play", value: true });
+  const out = [[new Float32Array(128), new Float32Array(128)]], got = [];
+  for (let b = 0; b < 600; b++) { p.process([], out); if (b > 300) got.push(...out[0][0]); }
+  // Nulldurchgänge zählen → Frequenz
+  let z = 0; for (let i = 1; i < got.length; i++) if (got[i - 1] < 0 && got[i] >= 0) z++;
+  const freq = z / (got.length / sr);
+  assert.ok(Math.abs(freq - f) < 20, `Frequenz ${freq.toFixed(1)} Hz statt ~440`);
+});
+
+test("Ohne Master Tempo steigt die Tonhöhe mit dem Tempo", () => {
+  const P = loadProcessor(), p = new P();
+  const sr = 48000, n = sr * 3, L = new Float32Array(n);
+  for (let i = 0; i < n; i++) L[i] = Math.sin(2 * Math.PI * 440 * i / sr);
+  p.onMsg({ type: "load", L, sampleRate: sr }); p.onMsg({ type: "rate", value: 1.08 }); p.onMsg({ type: "play", value: true });
+  const out = [[new Float32Array(128), new Float32Array(128)]], got = [];
+  for (let b = 0; b < 600; b++) { p.process([], out); if (b > 300) got.push(...out[0][0]); }
+  let z = 0; for (let i = 1; i < got.length; i++) if (got[i - 1] < 0 && got[i] >= 0) z++;
+  assert.ok(Math.abs(z / (got.length / sr) - 475) < 10);
+});
