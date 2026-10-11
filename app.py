@@ -146,8 +146,26 @@ def _safe_name(pid, name):
 
 
 def job_render(ids, analyze_after=True):
+    """Rendert nacheinander in Live. Die Analyse läuft parallel im Hintergrund,
+    damit Live schon das nächste Set öffnen kann."""
+    import queue
     s = db.load_settings()
     JOB.total = len(ids)
+    todo: "queue.Queue[int | None]" = queue.Queue()
+
+    def analyst():
+        while True:
+            pid = todo.get()
+            if pid is None:
+                break
+            try:
+                _analyze(pid)
+            except Exception as exc:
+                JOB.write(f"Analyse fehlgeschlagen: {exc}")
+
+    worker = threading.Thread(target=analyst, daemon=True)
+    if analyze_after:
+        worker.start()
     for pid in ids:
         if JOB.cancel:
             JOB.write("Abgebrochen."); break
@@ -159,11 +177,15 @@ def job_render(ids, analyze_after=True):
                                       app_name=s["live_app"], log=JOB.write)
             db.update(pid, {"mp3_path": mp3, "rendered_at": time.time(), "error": None})
             if analyze_after:
-                _analyze(pid)
+                todo.put(pid)
         except Exception as exc:
             db.update(pid, {"error": str(exc)})
             JOB.write(f"{p['name']}: {exc}")
         JOB.done += 1
+    if analyze_after:
+        todo.put(None)
+        JOB.write("Warte auf letzte Analysen …")
+        worker.join()
     JOB.write("Rendern abgeschlossen.")
 
 
