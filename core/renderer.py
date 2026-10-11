@@ -14,8 +14,14 @@ import os
 import shutil
 import subprocess
 import time
+import unicodedata
 
 LIVE_PROCESS = "Live"
+
+
+def _n(text: str) -> str:
+    """Umlaute vergleichbar machen: macOS liefert Dateinamen oft zerlegt (u + ¨), Live zeigt sie zusammengesetzt."""
+    return unicodedata.normalize("NFC", text or "").casefold()
 
 
 def _osa(script: str, timeout: int = 60) -> str:
@@ -58,7 +64,7 @@ def open_in_live(als_path: str, app_name: str) -> None:
 
 
 def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Ableton Live 12 Suite",
-               load_timeout: int = 180, render_timeout: int = 900, log=print) -> str:
+               load_timeout: int = 120, render_timeout: int = 900, log=print) -> str:
     """Öffnet das Set in Live, exportiert es und gibt den Pfad zur MP3 zurück."""
     os.makedirs(out_dir, exist_ok=True)
     set_name = os.path.splitext(os.path.basename(als_path))[0]
@@ -68,13 +74,20 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
     log(f"Öffne {set_name} in Live …")
     open_in_live(als_path, app_name)
     t0 = time.time()
+    next_note = 20
+    title = ""
     while time.time() - t0 < load_timeout:
         _dismiss_save_dialog()
-        if set_name in _front_window_title():
+        title = _front_window_title()
+        if _n(set_name) in _n(title):
             break
+        waited = time.time() - t0
+        if waited >= next_note:
+            log(f"Warte auf Live ({int(waited)} s) … Vorne ist gerade: „{title or 'kein Fenster'}“")
+            next_note += 20
         time.sleep(1.5)
     else:
-        raise TimeoutError("Set wurde nicht rechtzeitig geladen")
+        raise TimeoutError(f"Set wurde nicht geladen, Live zeigt „{title}“. Übersprungen.")
     time.sleep(4)  # Plug-ins/Samples fertig laden lassen
 
     log("Export-Dialog …")
