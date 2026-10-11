@@ -25,3 +25,23 @@ def test_playlists_crud(home):
     left = c.get("/api/dj/playlists").get_json()
     assert [p["name"] for p in left] == ["Opener"] and left[0]["items"] == ["i1", "p3"]
     assert c.post("/api/dj/playlists/999/tracks", json={"uids": ["p1"]}).status_code == 404
+
+
+def test_parallel_requests_do_not_share_connection(home):
+    """Viele gleichzeitige Anfragen (Mini-Waveforms) dürfen SQLite nicht durcheinanderbringen."""
+    import threading
+    import app as appmod
+    from core import db
+    pid = db.upsert({"path": "/x/A.als", "name": "A"})
+    errors = []
+
+    def worker():
+        c = appmod.app.test_client()
+        for _ in range(30):
+            r = c.get(f"/api/peaks/{pid}")
+            if r.status_code >= 500:
+                errors.append(r.status_code)
+            db.playlists()
+    ts = [threading.Thread(target=worker) for _ in range(12)]
+    [t.start() for t in ts]; [t.join() for t in ts]
+    assert errors == []
