@@ -98,7 +98,14 @@ def parse_set(path: str) -> SetInfo:
         in_key = _val(live, "InKey")
         if name is not None and name.isdigit():
             name = SCALE_INDEX.get(int(name), name)
-        if root_note is not None and root_note.isdigit() and (in_key in (None, "true")):
+        if in_key is None:  # Flag kann tiefer liegen
+            el = live.find(".//InKey")
+            in_key = el.get("Value") if el is not None else None
+        is_default = root_note in ("0", None) and (name or "Major").lower() == "major"
+        # Live speichert immer eine Skala (Standard C-Dur). Nur werten, wenn "Scale" aktiv ist
+        # oder bewusst etwas anderes als der Standard eingestellt wurde.
+        usable = in_key == "true" or (in_key is None and not is_default)
+        if root_note is not None and root_note.isdigit() and usable:
             info.key_root = NOTE_NAMES[int(root_note) % 12]
             info.scale_name = name
             if name:
