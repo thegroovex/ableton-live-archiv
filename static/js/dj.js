@@ -2,6 +2,7 @@
 const DJ = {
   ctx: null, decks: [], lib: [], sel: 0, shift: [false, false], hi: new FLX4.HiRes(),
   xfader: 0.5, headMix: 0.5, midiIn: null, midiOut: null, out4: false, ready: false, quantize: true,
+  keySync: localStorage.getItem("dj.keySync") || "off",   // off | same | compat
 };
 
 // --------------------------------------------------------------- Audio-Grundgerüst
@@ -69,7 +70,7 @@ class Deck {
     this.eq = { hi: 0.5, mid: 0.5, lo: 0.5 }; this.trim = 0.5; this.vol = 1; this.filter = 0.5; this.pfl = false;
     this.touch = false; this.ticks = 0; this.bendTimer = null;
     this.span = +(localStorage.getItem("dj.zoom" + i) || 6); this.drag = null;
-    this.keylock = false; this.autoBeats = 4; this.taps = []; this.nudging = 0; this.saveTimer = null;
+    this.keylock = localStorage.getItem("dj.keylock" + i) === "1"; this.shift = 0; this.keySynced = false; this.autoBeats = 4; this.taps = []; this.nudging = 0; this.saveTimer = null;
     this.el = $(`#deck-${i}`);
     this.render();
   }
@@ -93,9 +94,28 @@ class Deck {
     this.applyAll();
     if (this.buffer) this.sendBuffer();
   }
-  applyAll() { this.applyEq(); this.applyTrim(); this.applyVol(); this.applyFilter(); this.applyRate(); this.applyPfl(); this.applyKeylock(); }
+  applyAll() { this.applyEq(); this.applyTrim(); this.applyVol(); this.applyFilter(); this.applyRate(); this.applyPfl(); this.applyKeylock(); this.applyShift(); }
   applyKeylock() { this.node?.port.postMessage({ type: "keylock", value: this.keylock }); }
-  toggleKeylock() { this.keylock = !this.keylock; this.applyKeylock(); this.renderState(); }
+  /* Repitch (Tempo ändert die Tonhöhe) ↔ Keep Pitch (Tonhöhe bleibt) */
+  toggleKeylock() {
+    this.keylock = !this.keylock; localStorage.setItem("dj.keylock" + this.i, this.keylock ? "1" : "0");
+    this.applyKeylock(); if (this.keySynced) this.keySync(true); this.renderState();
+  }
+  applyShift() { this.node?.port.postMessage({ type: "semis", value: this.shift }); }
+  setShift(st) { this.shift = DJL.clamp(Math.round(st * 1000) / 1000, -12, 12); this.applyShift(); this.renderState(); }
+  /* Manuell transponieren (Halbtonschritte); hebt Key Sync auf */
+  shiftStep(dir) { this.keySynced = false; this.setShift(dir ? Math.round(this.shift) + dir : 0); }
+  keyInfo() { return { root: this.track?.key_root, mode: this.track?.key_mode, rate: this.rate, keylock: this.keylock, shift: this.shift }; }
+  /* Key Sync: Tonhöhe automatisch auf die (kompatible) Tonart des anderen Decks setzen */
+  keySync(quiet = false) {
+    const o = DJ.decks[1 - this.i];
+    if (!o.track) return false;
+    const st = DJL.keySyncShift(this.keyInfo(), o.keyInfo(), DJ.keySync === "same", this.keySynced ? this.shift : null);
+    if (st == null) { if (!quiet) toast?.("Key Sync: Tonart unbekannt – Track erst analysieren"); this.keySynced = false; return false; }
+    this.keySynced = true; o.keySynced = false;
+    if (Math.abs(st - this.shift) > 0.005) this.setShift(st);
+    return true;
+  }
   applyEq() { if (!this.lo) return; this.lo.gain.value = DJL.knobToEqDb(this.eq.lo); this.mid.gain.value = DJL.knobToEqDb(this.eq.mid); this.hiF.gain.value = DJL.knobToEqDb(this.eq.hi); }
   applyTrim() { if (this.trimG) this.trimG.gain.value = DJL.trimToGain(this.trim); }
   applyVol() { if (this.fader) this.fader.gain.value = this.vol * this.vol; }
@@ -115,6 +135,7 @@ class Deck {
     await djInitAudio();
     if (this.playing) { if (!confirm(`Deck ${"AB"[this.i]} spielt gerade. Trotzdem laden?`)) return; this.setPlay(false); }
     this.track = track; this.loop = null; this.synced = false; this.cue = 0; this.pos = 0;
+    this.keySynced = false; this.shift = 0; this.applyShift();
     this.render(); this.el.querySelector(".title b").textContent = "Lade …";
     const data = await (await fetch(track.url)).arrayBuffer();
     this.buffer = await DJ.ctx.decodeAudioData(data);
@@ -258,14 +279,15 @@ class Deck {
   beatjump(b) { this.seek(DJL.beatJump(this.pos, this.bpm, b)); }
   sync() {
     const other = DJ.decks[1 - this.i];
-    if (this.synced) { this.synced = false; this.applyRate(); this.renderState(); midiLed(FLX4.LED.sync(this.i, false)); return; }
+    if (this.synced) { this.synced = false; this.keySynced = false; this.applyRate(); this.renderState(); midiLed(FLX4.LED.sync(this.i, false)); return; }
     if (!this.bpm || !other.track || !other.bpm) return;
     this.synced = true;
     this.rate = DJL.syncRate(this.bpm, other.effBpm); this.applyRate();
+    if (DJ.keySync !== "off") this.keySync();
     if (other.playing) this.seek(this.pos + DJL.phaseCorrection(this.pos, this.bpm, this.grid, other.pos, other.bpm, other.grid));
     midiLed(FLX4.LED.sync(this.i, true)); this.renderState();
   }
-  setSlider(v) { this.slider = v; if (this.synced && Math.abs(DJL.sliderToRate(v, DJL.TEMPO_RANGES[this.rangeIdx]) - this.rate) > 0.002) { this.synced = false; midiLed(FLX4.LED.sync(this.i, false)); } this.applyRate(); this.renderState(); }
+  setSlider(v) { this.slider = v; if (this.synced && Math.abs(DJL.sliderToRate(v, DJL.TEMPO_RANGES[this.rangeIdx]) - this.rate) > 0.002) { this.synced = false; midiLed(FLX4.LED.sync(this.i, false)); } this.applyRate(); if (this.keySynced) this.keySync(true); this.renderState(); }
   cycleRange() { this.rangeIdx = (this.rangeIdx + 1) % DJL.TEMPO_RANGES.length; this.applyRate(); this.renderState(); }
   bend(amount) {
     this.node?.port.postMessage({ type: "bend", value: amount });
@@ -295,7 +317,8 @@ class Deck {
       <div class="meta"><span>${esc(t?.artist || "")}</span><span>${t ? keyLabel(t.key_root, t.key_mode) + " " + camelot(t.key_root, t.key_mode) : ""}</span><span>${esc(t?.genre || "")}</span></div>
       <div class="bpmrow">
         <div class="bigbpm" data-bpm>–<small>BPM</small></div>
-        <div class="ratebox"><span class="timeinfo" data-rate></span><button class="btn small" data-mt title="Master Tempo: Tonhöhe bleibt beim Pitchen gleich">MT</button></div>
+        <div class="ratebox"><span class="timeinfo" data-rate></span><button class="btn small mtbtn" data-mt title="Repitch: Tempo ändert die Tonhöhe · Keep Pitch: Tonhöhe bleibt beim Pitchen gleich">REPITCH</button>
+          <div class="keybox"><button class="btn small" data-ks="-1" title="Tonhöhe −1 Halbton">♭</button><button class="btn small keyval" data-ks="0" title="Klingende Tonart · Klick: Transposition zurücksetzen">–</button><button class="btn small" data-ks="1" title="Tonhöhe +1 Halbton">♯</button></div></div>
         <canvas class="phase" title="Takt (1–4) und Versatz zum anderen Deck"></canvas>
       </div>
       <div class="zoomwrap"><canvas class="zoom" title="Ziehen: Position verschieben (Shift = fein) · Mausrad: Zoom · Doppelklick: Cue setzen"></canvas>
@@ -331,6 +354,7 @@ class Deck {
     q("[data-cue]").onmousedown = () => this.cuePress(); q("[data-cue]").onmouseup = () => this.cueRelease();
     q("[data-sync]").onclick = () => this.sync();
     q("[data-mt]").onclick = () => this.toggleKeylock();
+    this.el.querySelectorAll("[data-ks]").forEach(b => b.onclick = () => this.shiftStep(+b.dataset.ks));
     q("[data-range]").onclick = () => this.cycleRange();
     q("[data-slider]").oninput = e => this.setSlider(+e.target.value);
     q("[data-reset]").onclick = () => { q("[data-slider]").value = 0.5; this.setSlider(0.5); };
@@ -389,6 +413,20 @@ class Deck {
     q("[data-rate]").textContent = ((this.rate - 1) * 100 >= 0 ? "+" : "") + ((this.rate - 1) * 100).toFixed(2) + "%";
     this.el.querySelectorAll("[data-bl]").forEach(b => b.classList.toggle("on", !!this.loop && this.bpm && Math.abs((this.loop.end - this.loop.start) - b.dataset.bl * 60 / this.bpm) < 1e-3));
     q("[data-mt]").classList.toggle("on", this.keylock);
+    q("[data-mt]").textContent = this.keylock ? "KEEP PITCH" : "REPITCH";
+    const kv = q(".keyval");
+    if (kv) {
+      const t = this.track, pc = DJL.effectivePitch(this.keyInfo()), nm = DJL.pitchName(pc);
+      const total = (this.keylock ? 0 : DJL.tempoSemis(this.rate)) + this.shift;
+      if (!t || !nm) kv.textContent = "–";
+      else {
+        const cents = Math.abs(nm.cents) >= 5 ? (nm.cents > 0 ? " +" : " ") + nm.cents + "ct" : "";
+        kv.textContent = keyLabel(nm.root, t.key_mode) + " " + camelot(nm.root, t.key_mode) + cents;
+      }
+      kv.title = (this.shift || total ? `Transponiert ${total >= 0 ? "+" : ""}${total.toFixed(2)} Halbtöne · ` : "") + "Klick: Transposition zurücksetzen";
+      kv.classList.toggle("on", Math.abs(total) > 0.05);
+      kv.classList.toggle("ksync", this.keySynced);
+    }
     q("[data-reloop]").classList.toggle("on", !!this.loop);
     q("[data-lin]").classList.toggle("on", this.loopIn != null || !!this.loop);
     q("[data-lout]").classList.toggle("on", !!this.loop);
@@ -1003,7 +1041,7 @@ function toggleKeyHelp() {
     ${row(c.nm, "Bremsen (halten) · Shift: 4 Beats zurück · Alt: Tempo −0,05 %")}${row(c.np, "Schieben (halten) · Shift: 4 Beats vor · Alt: Tempo +0,05 %")}
     ${row(c.li, "Loop In · Shift: Loop zurückschieben")}${row(c.lo, "Loop Out · Shift: Loop vorschieben")}${row(c.rl, "Reloop/Exit")}
     ${row(c.al, "Auto-Loop (Länge mit ½X/2X)")}${row(c.lh, "Loop ½X")}${row(c.ld, "Loop 2X")}
-    ${row(c.mt, "Master Tempo · Shift: Beatgrid-Beat hier")}${row(c.tap, "Tap-Tempo (ab 4 Taps)")}
+    ${row(c.mt, "Repitch/Keep Pitch · Shift: Beatgrid-Beat hier")}${row(c.tap, "Tap-Tempo (ab 4 Taps)")}
     <tr><td><kbd>${c.hc}</kbd></td><td>Hot Cues 1–4 · Shift: löschen</td></tr>`;
   el = document.createElement("div"); el.id = "keyhelp"; el.className = "keyhelp";
   el.innerHTML = `<div class="kh-box"><header>Tastatur <button class="btn small" id="kh-x">✕</button></header>
@@ -1030,6 +1068,7 @@ function frame() {
       const lv = d.level(), bar = $("#vu" + i); if (bar) bar.style.height = Math.round(lv * 100) + "%";
       if (DJ.midiOut && (DJ.frameN % 3 === 0)) midiLed(FLX4.LED.vu(i, lv));
       if (d.synced) { const o = DJ.decks[1 - i]; if (o.track && o.bpm) { const r = DJL.syncRate(d.bpm, o.effBpm); if (Math.abs(r - d.rate) > 1e-4) { d.rate = r; d.applyRate(); d.renderState(); } } }
+      if (d.keySynced && DJ.frameN % 15 === 0) d.keySync(true);
     });
   }
   if (DJ.frameN % 10 === 0) DJ.decks.forEach(d => { if (d.track) drawDjMini($(`canvas[data-djmini="${d.track.uid}"]`), d.track.uid); });
@@ -1047,8 +1086,18 @@ $("#view-dj .listhead").prepend(startBtn);
 const qBtn = document.createElement("button");
 qBtn.className = "btn small on"; qBtn.textContent = "QUANTIZE"; qBtn.title = "Loops, Hot Cues und Loop-Punkte rasten auf den Beat ein";
 qBtn.onclick = () => { DJ.quantize = !DJ.quantize; qBtn.classList.toggle("on", DJ.quantize); };
+const ksBtn = document.createElement("button");
+const KS_LABEL = { off: "KEY SYNC", same: "KEY SYNC =", compat: "KEY SYNC ±" };
+const renderKs = () => { ksBtn.textContent = KS_LABEL[DJ.keySync]; ksBtn.classList.toggle("on", DJ.keySync !== "off"); };
+ksBtn.className = "btn small";
+ksBtn.title = "SYNC stellt zusätzlich die Tonhöhe ein: = gleiche Tonart (bzw. Paralleltonart) · ± auch harmonisch kompatibel (Camelot ±1), kleinste Verschiebung";
+ksBtn.onclick = () => {
+  DJ.keySync = { off: "same", same: "compat", compat: "off" }[DJ.keySync] || "off"; localStorage.setItem("dj.keySync", DJ.keySync); renderKs();
+  DJ.decks.forEach(d => { if (d.synced && DJ.keySync !== "off") d.keySync(); else if (DJ.keySync === "off") d.keySynced = false; d.renderState(); });
+};
+renderKs();
 const kBtn = document.createElement("button");
 kBtn.className = "btn small"; kBtn.textContent = "⌨ Tasten"; kBtn.onclick = toggleKeyHelp;
-$("#midi-status").after(qBtn, kBtn);
+$("#midi-status").after(qBtn, ksBtn, kBtn);
 views.dj = { onShow: () => { loadLibrary(); initMidi(); listOutputs(); } };
 requestAnimationFrame(frame);
