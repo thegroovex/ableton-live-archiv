@@ -208,8 +208,13 @@ def clean_path(p: str) -> str:
     p = (p or "").strip().strip('"').strip("'")
     if p.startswith("file://"):
         p = p[7:]
+        if re.match(r"^/[A-Za-z]:", p):  # file:///C:/… unter Windows
+            p = p[1:]
     if "%" in p:
         p = unquote(p)
+    if os.name == "nt":
+        p = os.path.normpath(os.path.expanduser(p))
+        return p if re.match(r"^[A-Za-z]:\\?$", p) else p.rstrip("\\/")
     p = p.replace("\\ ", " ")
     return os.path.expanduser(p).rstrip("/") or "/"
 
