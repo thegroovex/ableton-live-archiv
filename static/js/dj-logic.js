@@ -111,6 +111,45 @@
   }
 
 
+  /* ---------- Tonhöhe: Repitch / Keep Pitch / Key Sync ---------- */
+  const PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  /* Tonhöhenänderung in Halbtönen, die eine Tempoänderung ohne Key Lock verursacht (+6 % ≈ +1 Halbton) */
+  function tempoSemis(rate) { return rate > 0 ? 12 * Math.log2(rate) : 0; }
+  /* Klingende Tonart eines Decks als Tonklasse 0..12 (Bruchteile möglich) */
+  function effectivePitch(d) {
+    const r = PITCH_CLASSES.indexOf(d.root);
+    if (r < 0) return null;
+    const p = r + (d.keylock ? 0 : tempoSemis(d.rate || 1)) + (d.shift || 0);
+    return ((p % 12) + 12) % 12;
+  }
+  const wrapSemis = x => { x = ((x % 12) + 12) % 12; return x >= 6 ? x - 12 : x; };
+  /* Key Sync: um wie viele Halbtöne muss Deck `me` transponiert werden, damit es zur klingenden Tonart
+     von `other` passt? Ziel ist die gleiche Tonart bzw. eine harmonisch kompatible (Camelot ±1 oder
+     Paralleltonart) – gewählt wird die kleinste Verschiebung. Mit `strict` nur gleiche Tonart/Paralleltonart.
+     Deck-Objekte: { root: "A", mode: "Moll"|"Dur", rate, keylock, shift } */
+  function keySyncShift(me, other, strict = false, prefer = null) {
+    const base = effectivePitch({ ...me, shift: 0 }), op = effectivePitch(other);
+    if (base == null || op == null) return null;
+    const meMinor = me.mode === "Moll", otMinor = other.mode === "Moll";
+    let targets;
+    if (meMinor === otMinor) targets = strict ? [op] : [op, op + 7, op - 7];
+    else targets = [meMinor ? op - 3 : op + 3];   // Paralleltonart: gleiche Camelot-Zahl
+    const cands = [];
+    for (const t of targets) { const s = wrapSemis(t - base); cands.push(s); if (Math.abs(s) > 5.5) cands.push(s > 0 ? s - 12 : s + 12); }
+    const min = Math.min(...cands.map(Math.abs));
+    let best = cands.find(c => Math.abs(Math.abs(c) - min) < 1e-9);
+    // Hysterese: nicht zwischen fast gleich guten Lösungen hin- und herspringen, solange der Sync läuft
+    if (prefer != null) { const near = cands.filter(c => Math.abs(c) <= min + 0.5).sort((x, y) => Math.abs(x - prefer) - Math.abs(y - prefer)); if (near.length) best = near[0]; }
+    return Math.round(best * 1000) / 1000;
+  }
+  /* Klingende Tonart als Text, z. B. { root: "A#", cents: -12 } */
+  function pitchName(pc) {
+    if (pc == null) return null;
+    const n = Math.round(pc) % 12;
+    return { root: PITCH_CLASSES[n], cents: Math.round((pc - Math.round(pc)) * 100) };
+  }
+
+
   /* ---------- Beatgrid ---------- */
   /* Position auf den nächsten (round) bzw. vorigen (floor) Beat einrasten */
   function snapToBeat(pos, bpm, grid = 0, mode = "round") {
@@ -256,7 +295,8 @@
 
   const api = { snapToBeat, normGrid, gridFromDownbeat, regrid, detectGrid, barBeat, tapTempo, loopHalve, loopDouble, loopMove, loopBeats, loopLabel,
     phaseOffset, KEYMAP, keyEvent, clamp, TEMPO_RANGES, sliderToRate, knobToEqDb, trimToGain, crossfaderGains, filterParams, syncRate,
-    beatPhase, phaseCorrection, beatLoop, beatJump, cuePress, cueRelease, hotcuePress, scratchVelocity, camelotCompatible };
+    beatPhase, phaseCorrection, beatLoop, beatJump, cuePress, cueRelease, hotcuePress, scratchVelocity, camelotCompatible,
+    PITCH_CLASSES, tempoSemis, effectivePitch, keySyncShift, pitchName };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.DJL = api;
 })(typeof window !== "undefined" ? window : globalThis);
