@@ -406,7 +406,8 @@ def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Able
 
 
 def _to_mp3(src: str) -> str:
-    ffmpeg = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
+    from core.platform_util import ffmpeg_path
+    ffmpeg = ffmpeg_path() or "/opt/homebrew/bin/ffmpeg"
     if not os.path.exists(ffmpeg):
         raise RuntimeError("Live hat kein MP3 erzeugt und ffmpeg fehlt. Aktiviere 'MP3 kodieren' im Export-Dialog "
                            "oder installiere ffmpeg (brew install ffmpeg).")
