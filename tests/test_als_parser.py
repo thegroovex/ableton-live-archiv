@@ -74,3 +74,13 @@ def test_timesig_decoding():
     assert _decode_timesig("201") == "4/4"
     assert _decode_timesig("200") == "3/4"
     assert _decode_timesig("303") == "7/8"
+
+
+def test_clean_path_handles_copied_paths(tmp_path, make_set):
+    from core.als_parser import clean_path
+    d = tmp_path / "Own Tracks"
+    make_set(str(d / "A Project" / "A.als"))
+    assert clean_path(str(tmp_path) + "/Own%20Tracks") == str(d)
+    assert clean_path("file://" + str(tmp_path) + "/Own%20Tracks/") == str(d)
+    assert clean_path('"' + str(d) + '"') == str(d)
+    assert len(find_sets([str(tmp_path) + "/Own%20Tracks"])) == 1
