@@ -88,11 +88,16 @@ def job_scan(roots):
     JOB.total = len(paths)
     JOB.write(f"{len(paths)} Live-Sets gefunden.")
     known = {r["path"] for r in db.db().execute("SELECT path FROM projects")}
+    if not paths:
+        JOB.write("Keine .als-Dateien gefunden. Stimmt der Pfad unter ⚙?")
+    new = 0
     for p in paths:
         if JOB.cancel:
             break
         try:
+            new += p not in known
             index_set(p)
+            JOB.write(f"Gelesen: {os.path.basename(p)}")
         except Exception as exc:
             JOB.write(f"{os.path.basename(p)}: {exc}")
         JOB.done += 1
@@ -101,7 +106,7 @@ def job_scan(roots):
         if not os.path.exists(g):
             db.db().execute("UPDATE projects SET missing=1 WHERE path=?", (g,))
     db.db().commit()
-    JOB.write("Scan abgeschlossen.")
+    JOB.write(f"Scan abgeschlossen: {len(paths)} Sets, davon {new} neu.")
 
 
 def _safe_name(pid, name):
@@ -432,6 +437,9 @@ def main():
     if "--no-browser" not in sys.argv:
         threading.Timer(1.2, lambda: open_browser(url)).start()
     print(f"Live Archiv läuft auf {url}  (Beenden mit Ctrl+C)")
+    import logging
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)  # keine GET-Zeilen im Terminal
+    print(f"Live Archiv läuft auf http://127.0.0.1:{port}  (Fenster offen lassen, Ctrl+C beendet)")
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
 
 
