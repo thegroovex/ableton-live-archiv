@@ -1,6 +1,10 @@
+<p align="center"><img src="docs/brand/live-archiv-icon-256.png" width="128" alt="Live Archiv"></p>
+
 # Live Archiv
 
 🇩🇪 Deutsch · [🇬🇧 English](README.en.md)
+
+**Live Archiv by BeatTactics** · *designed by groovex*
 
 Ordnung für deine Ableton-Live-12-Projekte – plus DJ-Modus für den Pioneer DDJ-FLX4.
 
@@ -111,6 +115,12 @@ Die Tests laufen bei jedem Push automatisch auf macOS und Windows (GitHub Action
 ## Daten
 Alles liegt in `~/LiveArchiv` bzw. unter Windows in `%USERPROFILE%\LiveArchiv` (Datenbank, Playlists, MP3s, importierte Musik). Deine Live-Sets werden nie verändert.
 
+## Marke
+Live Archiv ist ein Produkt von **BeatTactics** – *designed by groovex*. Logo und Icon liegen in `docs/brand/` (BeatTactics-Logo hell/dunkel/transparent, App-Icon als SVG/PNG). Das App-Icon erzeugt `desktop/build/make_icon.py` (Markenverlauf `#FF7A18 → #FF2D6F → #B14BFF`, dunkles Squircle).
+
+<p align="center"><img src="docs/brand/beattactics-logo-dark.png" width="360" alt="BeatTactics – designed by groovex"></p>
+
 ## Versionen
+- **v1.1.1** (15.10.2026): BeatTactics-Branding – neues App-Icon, Logo im Startbildschirm, in der Kopfzeile und in den Einstellungen, „Über Live Archiv“ im Hilfe-Menü.
 - **v1.1.0** (14.10.2026): Standalone-App für macOS (DMG, Apple Silicon) und Windows (Installer) – ohne Python-Installation, mit eigenem Fenster, Sprachmenü und mitgeliefertem ffmpeg. Skript-Start bleibt. Englische Übersetzung der Analyse-Meldungen ergänzt.
 - **v1.0.0** (11.10.2026): Archiv, MP3-Export, Analyse, DJ-Modus mit FLX4, Playlists, Deutsch/Englisch, macOS + Windows.

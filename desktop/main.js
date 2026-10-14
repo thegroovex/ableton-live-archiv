@@ -9,6 +9,12 @@ const os = require("os");
 const lib = require("./lib");
 
 app.setName("Live Archiv");
+app.setAboutPanelOptions({
+  applicationName: "Live Archiv",
+  applicationVersion: app.getVersion(),
+  copyright: "© 2026 BeatTactics · designed by groovex",
+  website: "https://github.com/thegroovex/ableton-live-archiv",
+});
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 const DATA_DIR = path.join(os.homedir(), "LiveArchiv");
@@ -88,6 +94,10 @@ function buildMenu() {
       ],
     },
     { role: "windowMenu" },
+    { role: "help", submenu: [
+      { label: "Über Live Archiv / About", click: () => app.showAboutPanel() },
+      { label: "Projektseite / Project page", click: () => shell.openExternal("https://github.com/thegroovex/ableton-live-archiv") },
+    ] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -107,7 +117,7 @@ function guardWindow(w) {
 async function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 1000, minHeight: 640,
-    title: "Live Archiv", backgroundColor: "#1b1b1b", show: false,
+    title: "Live Archiv", backgroundColor: "#121317", icon: path.join(__dirname, "app-icon.png"), show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });
   win.once("ready-to-show", () => win.show());

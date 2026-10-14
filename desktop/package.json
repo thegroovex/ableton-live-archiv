@@ -1,9 +1,9 @@
 {
   "name": "live-archiv",
   "productName": "Live Archiv",
-  "version": "1.1.0",
-  "description": "Live Archiv – Ableton-Projektarchiv und DJ-Modus als eigenständige App",
-  "author": "thegroovex",
+  "version": "1.1.1",
+  "description": "Live Archiv by BeatTactics – designed by groovex. Ableton-Projektarchiv und DJ-Modus als eigenständige App",
+  "author": "BeatTactics",
   "license": "UNLICENSED",
   "private": true,
   "main": "main.js",
@@ -19,7 +19,7 @@
     "ffmpeg-static": "5.3.0"
   },
   "build": {
-    "appId": "com.thegroovex.livearchiv",
+    "appId": "com.beattactics.livearchiv",
     "productName": "Live Archiv",
     "directories": {
       "output": "release",
@@ -29,6 +29,8 @@
       "main.js",
       "lib.js",
       "loading.html",
+      "app-icon.png",
+      "brand-logo.svg",
       "package.json"
     ],
     "extraResources": [
@@ -76,6 +78,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "Live Archiv"
-    }
+    },
+    "copyright": "© 2026 BeatTactics · designed by groovex"
   }
 }

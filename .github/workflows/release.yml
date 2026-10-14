@@ -81,6 +81,8 @@ jobs:
           make_latest: true
           files: out/*
           body: |
+            **Live Archiv by BeatTactics** · *designed by groovex*
+
             **App (empfohlen, ohne Python) / App (recommended, no Python needed)**
             - 🍎 macOS (Apple Silicon): `Live-Archiv-macOS-arm64.dmg` → öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“.
             - 🪟 Windows 10/11: `Live-Archiv-Windows-Setup.exe` → installieren. Bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“.
