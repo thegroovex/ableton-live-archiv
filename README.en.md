@@ -12,8 +12,8 @@ Two ways, one library (`~/LiveArchiv`):
 **1. As an app (recommended, no Python needed)**
 | System | Download | Start |
 |---|---|---|
-| 🍎 macOS (Apple Silicon) | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-mac-arm64.dmg` | Open the DMG, drag “Live Archiv” to Applications. On first launch macOS reports an unverified app: System Settings → Privacy & Security → “Open Anyway” (once). |
-| 🪟 Windows 10/11 | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-win-x64.exe` | Run the installer (if SmartScreen appears: “More info” → “Run anyway”). Start menu and desktop shortcut “Live Archiv”. |
+| 🍎 macOS (Apple Silicon) | [Live-Archiv-macOS-arm64.dmg](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-macOS-arm64.dmg) | Open the DMG, drag “Live Archiv” to Applications. On first launch macOS reports an unverified app: System Settings → Privacy & Security → “Open Anyway” (once). |
+| 🪟 Windows 10/11 | [Live-Archiv-Windows-Setup.exe](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-Windows-Setup.exe) | Run the installer (if SmartScreen appears: “More info” → “Run anyway”). Start menu and desktop shortcut “Live Archiv”. |
 
 The app bundles Python, all packages and ffmpeg and shows the interface in its own window (Chromium – Web MIDI for the FLX4 and choosing the audio output work just like in Chrome). Menu **View → Sprache / Language** switches German/English; **Extras** opens the interface in a browser if needed, the data folder or the log.
 
@@ -105,7 +105,12 @@ pip install -r requirements.txt pytest
 python -m pytest -v
 node --test tests/js/*.test.js
 ```
+The tests also cover the app shell (`tests/test_desktop.py`, `tests/js/desktop.test.js`). They run in GitHub Actions on macOS and Windows on every push; the repo is public, so builds don't use up Actions minutes.
 Tests run on every push on macOS and Windows (GitHub Actions): set parser, classification, database and search filters, all API endpoints, audio analysis on synthetic tracks, the render flow with a simulated Live on both systems, playlists, the FLX4 MIDI mapping, DJ logic, beatgrid detection, the audio engine and the translation.
 
 ## Data
 Everything is stored in `~/LiveArchiv` (Windows: `%USERPROFILE%\LiveArchiv`): database, playlists, MP3s, imported music. Your Live sets are never modified.
+
+## Versions
+- **v1.1.0** (Oct 14, 2026): Standalone app for macOS (DMG, Apple Silicon) and Windows (installer) – no Python install needed, own window, language menu and bundled ffmpeg. The script start stays. English translation of the analysis messages added.
+- **v1.0.0** (Oct 11, 2026): Archive, MP3 export, analysis, DJ mode with FLX4, playlists, German/English, macOS + Windows.

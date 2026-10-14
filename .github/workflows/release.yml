@@ -3,7 +3,7 @@ name: Release (Apps + ZIPs)
 #   • Standalone-Apps: macOS (.dmg, Apple Silicon) und Windows (Installer .exe) – ohne Python-Installation
 #   • die bisherigen ZIPs mit start.command / start.bat (Python nötig)
 # und hängt alles an das GitHub-Release. Manuell startbar (Actions → "Release" → Run workflow); dann wird "latest" aktualisiert.
-# Hinweis Actions-Minuten: der macOS-Build zählt 10-fach – deshalb nur bei Tags, nicht bei jedem Push.
+# Das Repo ist öffentlich: GitHub-Standard-Runner kosten keine Actions-Minuten.
 on:
   push:
     tags: ["v*"]
@@ -82,8 +82,8 @@ jobs:
           files: out/*
           body: |
             **App (empfohlen, ohne Python) / App (recommended, no Python needed)**
-            - 🍎 macOS (Apple Silicon): `Live-Archiv-…-mac-arm64.dmg` → öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“.
-            - 🪟 Windows 10/11: `Live-Archiv-…-win-x64.exe` → installieren. Bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“.
+            - 🍎 macOS (Apple Silicon): `Live-Archiv-macOS-arm64.dmg` → öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“.
+            - 🪟 Windows 10/11: `Live-Archiv-Windows-Setup.exe` → installieren. Bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“.
 
             **Skript-Version (wie bisher, Python 3.10+ nötig)**
             - 🍎 `Live-Archiv-macOS.zip` → entpacken → `start.command`

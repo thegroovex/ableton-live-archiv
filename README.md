@@ -12,8 +12,8 @@ Zwei Wege, dieselbe Bibliothek (`~/LiveArchiv`):
 **1. Als App (empfohlen, ohne Python)**
 | System | Download | Start |
 |---|---|---|
-| 🍎 macOS (Apple Silicon) | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-mac-arm64.dmg` | DMG öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start meldet macOS eine nicht verifizierte App: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“ (einmalig). |
-| 🪟 Windows 10/11 | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-win-x64.exe` | Installer starten (bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“). Startmenü- und Desktop-Verknüpfung „Live Archiv“. |
+| 🍎 macOS (Apple Silicon) | [Live-Archiv-macOS-arm64.dmg](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-macOS-arm64.dmg) | DMG öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start meldet macOS eine nicht verifizierte App: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“ (einmalig). |
+| 🪟 Windows 10/11 | [Live-Archiv-Windows-Setup.exe](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-Windows-Setup.exe) | Installer starten (bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“). Startmenü- und Desktop-Verknüpfung „Live Archiv“. |
 
 Die App bringt Python, alle Pakete und ffmpeg mit und öffnet die Oberfläche im eigenen Fenster (Chromium – Web MIDI für den FLX4 und die Wahl des Audio-Ausgangs funktionieren wie in Chrome). Menü **Ansicht → Sprache / Language** schaltet Deutsch/Englisch um, **Extras** öffnet die Oberfläche bei Bedarf im Browser, den Datenordner oder das Protokoll.
 
@@ -105,7 +105,12 @@ pip install -r requirements.txt pytest
 python -m pytest -v
 node --test tests/js/*.test.js
 ```
+Die Tests decken auch die App-Hülle ab (`tests/test_desktop.py`, `tests/js/desktop.test.js`). Bei jedem Push laufen sie in GitHub Actions auf macOS und Windows; das Repo ist öffentlich, die Builds kosten also keine Actions-Minuten.
 Die Tests laufen bei jedem Push automatisch auf macOS und Windows (GitHub Actions). Getestet werden Set-Parser, Klassifizierung, Datenbank und Suchfilter, alle API-Endpunkte, Audio-Analyse an synthetischen Tracks, der Render-Ablauf mit simuliertem Live, das AppleScript (Kompilierung auf macOS), der Windows-Export mit simuliertem Live, Playlists, das FLX4-MIDI-Mapping, die DJ-Logik, die Beatgrid-Erkennung, die Audio-Engine und die Übersetzung.
 
 ## Daten
 Alles liegt in `~/LiveArchiv` bzw. unter Windows in `%USERPROFILE%\LiveArchiv` (Datenbank, Playlists, MP3s, importierte Musik). Deine Live-Sets werden nie verändert.
+
+## Versionen
+- **v1.1.0** (14.10.2026): Standalone-App für macOS (DMG, Apple Silicon) und Windows (Installer) – ohne Python-Installation, mit eigenem Fenster, Sprachmenü und mitgeliefertem ffmpeg. Skript-Start bleibt. Englische Übersetzung der Analyse-Meldungen ergänzt.
+- **v1.0.0** (11.10.2026): Archiv, MP3-Export, Analyse, DJ-Modus mit FLX4, Playlists, Deutsch/Englisch, macOS + Windows.
