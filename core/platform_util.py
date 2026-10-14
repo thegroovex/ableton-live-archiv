@@ -71,6 +71,10 @@ def open_browser(url: str) -> None:
 
 
 def ffmpeg_path() -> str | None:
+    # Die Standalone-App bringt ihr eigenes ffmpeg mit und reicht den Pfad per Umgebungsvariable durch.
+    bundled = os.environ.get("LIVE_ARCHIV_FFMPEG")
+    if bundled and os.path.isfile(bundled):
+        return bundled
     found = shutil.which("ffmpeg")
     if found:
         return found

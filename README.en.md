@@ -7,12 +7,23 @@ Keeps your Ableton Live 12 projects in order – plus a DJ mode for the Pioneer 
 **Runs on macOS (primary platform) and Windows 10/11.** The interface is available in German and English.
 
 ## Download
+Two ways, one library (`~/LiveArchiv`):
+
+**1. As an app (recommended, no Python needed)**
+| System | Download | Start |
+|---|---|---|
+| 🍎 macOS (Apple Silicon) | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-mac-arm64.dmg` | Open the DMG, drag “Live Archiv” to Applications. On first launch macOS reports an unverified app: System Settings → Privacy & Security → “Open Anyway” (once). |
+| 🪟 Windows 10/11 | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-win-x64.exe` | Run the installer (if SmartScreen appears: “More info” → “Run anyway”). Start menu and desktop shortcut “Live Archiv”. |
+
+The app bundles Python, all packages and ffmpeg and shows the interface in its own window (Chromium – Web MIDI for the FLX4 and choosing the audio output work just like in Chrome). Menu **View → Sprache / Language** switches German/English; **Extras** opens the interface in a browser if needed, the data folder or the log.
+
+**2. As a script (as before, Python 3.10+ required)**
 | System | Download | Start |
 |---|---|---|
 | 🍎 macOS | [Live-Archiv-macOS.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-macOS.zip) | unzip, double-click `start.command` (first time: right-click → Open, because macOS blocks downloaded scripts) |
 | 🪟 Windows | [Live-Archiv-Windows.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-Windows.zip) | unzip, double-click `start.bat` (if SmartScreen appears: “More info” → “Run anyway”) |
 
-All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/releases). GitHub Actions builds the ZIPs automatically for every version tag (`v1.2.3`). Python 3.10+ is required (see Installation).
+All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/releases). GitHub Actions builds the apps and ZIPs automatically for every version tag (`v1.2.3`). App (port 5078) and script (port 5077) can even run at the same time.
 
 ## Features
 **Archive**
@@ -55,7 +66,7 @@ All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/relea
 ## One-time setup
 - ⚙ Settings: language (automatic/German/English, or the DE/EN button top right), project folders (macOS e.g. `~/Music/Ableton`, Windows e.g. `~/Documents/Ableton`), `.als` template for new projects, Live app name (e.g. “Ableton Live 12 Suite”).
 - Open “Export Audio/Video” in Live once (macOS ⇧⌘R, Windows Ctrl+Shift+R): rendered track “Main”, whole arrangement, **Encode MP3** on. Live remembers this.
-- **macOS only:** for the automatic export allow Terminal under System Settings → Privacy & Security → **Accessibility**.
+- **macOS only:** for the automatic export allow System Settings → Privacy & Security → **Accessibility** – for the app “Live Archiv”, for the script start “Terminal”. On the first export macOS also asks whether Live Archiv may control “System Events” and Ableton Live: allow it.
 - **Windows only:** Live is looked up under `C:\ProgramData\Ableton\…`, otherwise started through the `.als` file association. Between two sets Live is quit and restarted (rendering only starts while Live is closed, so nothing is lost).
 - Don't use mouse and keyboard while rendering.
 
@@ -65,9 +76,25 @@ All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/relea
 | Archive, search, analysis, DJ mode, FLX4 | ✔ | ✔ |
 | Automatic MP3 export | AppleScript + Accessibility | Win32 (SendInput), no extra permissions |
 | Reveal file | Finder | Explorer |
-| Start | `start.command` | `start.bat` |
+| App | `.dmg` (Apple Silicon) | Installer `.exe` (x64) |
+| Script start | `start.command` | `start.bat` |
 
 macOS is the primary platform: new features land there first. Everything OS-specific lives in `core/platform_util.py`; the export in `core/renderer.py` (macOS) and `core/renderer_win.py` (Windows).
+
+## Standalone app (structure and building it yourself)
+- `desktop/` holds the app shell: **Electron** (`main.js`, `lib.js`) starts the Python server invisibly in the background and shows the interface in its own window; the server is bundled with **PyInstaller** (`live-archiv-server.spec`, entry point `server_entry.py`), ffmpeg comes from `ffmpeg-static`.
+- The Python code is the same for script and app, so new features land in both automatically.
+- GitHub Actions (`.github/workflows/release.yml`) builds on every tag `v*`: macOS DMG, Windows installer and the ZIPs. Before packaging, the bundled server is started once as a self-test.
+- Build locally (in `desktop/`, Python packages installed as above):
+  ```
+  pip install pyinstaller
+  npm install
+  npm run server          # bundle the Python server
+  npm run dist:mac        # or npm run dist:win
+  ```
+  To try it without packaging: `npm start` (then uses `python3 server_entry.py`).
+- The app is not signed by Apple or Microsoft (ad-hoc signed on the Mac), hence the one-time approval on first launch.
+- Background service log: `~/LiveArchiv/logs/server.log` (menu Extras → Show log).
 
 ## Language
 The UI source is German; `static/js/i18n.js` translates it to English at runtime and swaps Mac terms on Windows (⌘ → Ctrl, Finder → Explorer). Add new strings to the `EN` dictionary (fixed texts) or `P` (texts with values); a test checks that every text in `index.html` has a translation.

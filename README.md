@@ -7,12 +7,23 @@ Ordnung für deine Ableton-Live-12-Projekte – plus DJ-Modus für den Pioneer D
 **Läuft auf macOS (führend) und Windows 10/11.** Die Oberfläche gibt es auf Deutsch und Englisch.
 
 ## Download
+Zwei Wege, dieselbe Bibliothek (`~/LiveArchiv`):
+
+**1. Als App (empfohlen, ohne Python)**
+| System | Download | Start |
+|---|---|---|
+| 🍎 macOS (Apple Silicon) | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-mac-arm64.dmg` | DMG öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start meldet macOS eine nicht verifizierte App: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“ (einmalig). |
+| 🪟 Windows 10/11 | [Releases](https://github.com/thegroovex/ableton-live-archiv/releases/latest) → `Live-Archiv-…-win-x64.exe` | Installer starten (bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“). Startmenü- und Desktop-Verknüpfung „Live Archiv“. |
+
+Die App bringt Python, alle Pakete und ffmpeg mit und öffnet die Oberfläche im eigenen Fenster (Chromium – Web MIDI für den FLX4 und die Wahl des Audio-Ausgangs funktionieren wie in Chrome). Menü **Ansicht → Sprache / Language** schaltet Deutsch/Englisch um, **Extras** öffnet die Oberfläche bei Bedarf im Browser, den Datenordner oder das Protokoll.
+
+**2. Als Skript (wie bisher, Python 3.10+ nötig)**
 | System | Download | Start |
 |---|---|---|
 | 🍎 macOS | [Live-Archiv-macOS.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-macOS.zip) | entpacken, `start.command` doppelklicken (beim ersten Mal Rechtsklick → Öffnen, weil macOS heruntergeladene Skripte blockiert) |
 | 🪟 Windows | [Live-Archiv-Windows.zip](https://github.com/thegroovex/ableton-live-archiv/releases/latest/download/Live-Archiv-Windows.zip) | entpacken, `start.bat` doppelklicken (bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“) |
 
-Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/releases). Die ZIPs baut GitHub Actions automatisch bei jedem Versions-Tag (`v1.2.3`). Voraussetzung ist Python 3.10+ (siehe Installation).
+Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/releases). Apps und ZIPs baut GitHub Actions automatisch bei jedem Versions-Tag (`v1.2.3`). App (Port 5078) und Skript (Port 5077) können sogar gleichzeitig laufen.
 
 ## Funktionen
 **Archiv**
@@ -55,7 +66,7 @@ Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/rel
 ## Einmalige Einrichtung
 - ⚙ Einstellungen: Sprache (Automatisch/Deutsch/English, auch per DE/EN-Knopf oben rechts), Projektordner (macOS z. B. `~/Music/Ableton`, Windows z. B. `~/Documents/Ableton`), Vorlage `.als` für neue Projekte, Name der Live-App (z. B. „Ableton Live 12 Suite“).
 - In Live einmal „Audio/Video exportieren“ (macOS ⇧⌘R, Windows Strg+Shift+R) öffnen: Gerenderte Spur „Main“, ganzes Arrangement, **MP3 kodieren** an. Live merkt sich das.
-- **Nur macOS:** Für den automatischen Export Systemeinstellungen → Datenschutz & Sicherheit → **Bedienungshilfen** → Terminal erlauben.
+- **Nur macOS:** Für den automatischen Export Systemeinstellungen → Datenschutz & Sicherheit → **Bedienungshilfen** erlauben – für die App „Live Archiv“, beim Skript-Start „Terminal“. Beim ersten Export fragt macOS außerdem, ob Live Archiv „System Events“ bzw. Ableton Live steuern darf: erlauben.
 - **Nur Windows:** Live wird unter `C:\ProgramData\Ableton\…` gesucht, sonst über die `.als`-Dateizuordnung gestartet. Zwischen zwei Sets wird Live beendet und frisch gestartet (Rendern startet nur bei geschlossenem Live, es geht also nichts verloren).
 - Während des Renderns Maus und Tastatur nicht benutzen.
 
@@ -65,9 +76,25 @@ Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/rel
 | Archiv, Suche, Analyse, DJ-Modus, FLX4 | ✔ | ✔ |
 | Automatischer MP3-Export | AppleScript + Bedienungshilfen | Win32 (SendInput), ohne Zusatzrechte |
 | Datei zeigen | Finder | Explorer |
-| Start | `start.command` | `start.bat` |
+| App | `.dmg` (Apple Silicon) | Installer `.exe` (x64) |
+| Skript-Start | `start.command` | `start.bat` |
 
 macOS ist die führende Plattform: neue Funktionen entstehen dort zuerst. Alles Systemabhängige liegt in `core/platform_util.py`, der Export in `core/renderer.py` (macOS) bzw. `core/renderer_win.py` (Windows).
+
+## Standalone-App (Aufbau und selbst bauen)
+- `desktop/` enthält die App-Hülle: **Electron** (`main.js`, `lib.js`) startet den Python-Server unsichtbar im Hintergrund und zeigt die Oberfläche im eigenen Fenster; der Server wird mit **PyInstaller** gebündelt (`live-archiv-server.spec`, Einstieg `server_entry.py`), ffmpeg kommt aus `ffmpeg-static`.
+- Der Python-Code ist für Skript und App derselbe. Neue Funktionen landen also automatisch in beiden Wegen.
+- Gebaut wird in GitHub Actions (`.github/workflows/release.yml`) bei jedem Tag `v*`: macOS-DMG, Windows-Installer und die ZIPs. Vor dem Paketieren startet der gebündelte Server einmal als Selbsttest.
+- Lokal bauen (im Ordner `desktop/`, Python-Pakete wie oben installiert):
+  ```
+  pip install pyinstaller
+  npm install
+  npm run server          # Python-Server bündeln
+  npm run dist:mac        # bzw. npm run dist:win
+  ```
+  Zum Ausprobieren ohne Paketieren: `npm start` (nutzt dann `python3 server_entry.py`).
+- Die App ist nicht von Apple bzw. Microsoft signiert (ad hoc signiert auf dem Mac). Deshalb die einmalige Freigabe beim ersten Start.
+- Protokoll des Hintergrunddienstes: `~/LiveArchiv/logs/server.log` (Menü Extras → Protokoll zeigen).
 
 ## Sprache
 Die Oberfläche ist auf Deutsch geschrieben; `static/js/i18n.js` übersetzt sie zur Laufzeit ins Englische und ersetzt auf Windows Mac-Begriffe (⌘ → Strg/Ctrl, Finder → Explorer). Neue Texte dort im Wörterbuch `EN` (feste Texte) oder in `P` (Texte mit Werten) ergänzen; ein Test prüft, dass alle Texte in `index.html` übersetzt sind.

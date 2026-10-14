@@ -57,3 +57,16 @@ test("Alle sichtbaren Texte der Oberfläche haben eine englische Fassung", () =>
   const missing = texts.filter(s => german.test(s) && t(s) === s && !["Deutsch", "English"].includes(s));
   assert.deepEqual(missing, []);
 });
+
+test("Englisch: Meldungen des Servers (Jobs, Fehler, Analyse)", () => {
+  const { t } = load("en", "MacIntel");
+  const msgs = [
+    "Scan abgeschlossen: 5 Sets, davon 2 neu, 3 vorhandene MP3s zugeordnet.", "Analyse abgeschlossen.", "Import abgeschlossen.",
+    "Rendern abgeschlossen.", "Bitte warten, bis der laufende Vorgang fertig ist.", "Bitte einen Namen angeben.",
+    "Bitte in den Einstellungen eine Vorlage (.als) auswählen.", "Format nicht unterstützt",
+    "Live hat den Export-Dialog nicht geöffnet. Übersprungen.",
+  ];
+  for (const m of msgs) assert.notEqual(t(m), m, m);
+  assert.equal(t("Song.mp3: stumm, übersprungen"), "Song.mp3: silent, skipped");
+  assert.equal(t("Song.mp3: zu kurz für eine Analyse (unter 3 s), übersprungen"), "Song.mp3: too short to analyze (under 3 s), skipped");
+});

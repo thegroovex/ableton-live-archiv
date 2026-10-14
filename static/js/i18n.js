@@ -149,6 +149,7 @@
     [/^(\d+) Audiodateien in diesem Ordner – Unterordner werden mit eingelesen\.$/, "$1 audio files in this folder – subfolders are included."],
     [/^Tags bearbeiten · (\d+) Tracks$/, "Edit tags · $1 tracks"], [/^Tags bearbeiten · /, "Edit tags · "],
     [/^Alle (\d+) Tracks neu analysieren\? Von dir geänderte Werte bleiben erhalten\.$/, "Re-analyze all $1 tracks? Values you changed are kept."],
+    [/^(.+): stumm, übersprungen$/, "$1: silent, skipped"], [/^(.+): zu kurz für eine Analyse \(unter 3 s\), übersprungen$/, "$1: too short to analyze (under 3 s), skipped"],
     [/^Analyse gestartet: (\d+) Tracks$/, "Analysis started: $1 tracks"], [/^Gespeichert, (\d+) Datei\(en\) aktualisiert$/, "Saved, $1 file(s) updated"],
     [/^Nicht in die Datei geschrieben:/, "Not written to file:"], [/^Laufwerk ([A-Z]):$/, "Drive $1:"],
   ];

@@ -23,7 +23,8 @@ from core import platform_util
 
 renderer = platform_util.renderer()
 
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+# Als Standalone-App (PyInstaller) liegen static/ und Co. im Entpack-Ordner der App.
+APP_DIR = getattr(sys, "_MEIPASS", None) or os.path.dirname(os.path.abspath(__file__))
 app = Flask(__name__, static_folder=os.path.join(APP_DIR, "static"), static_url_path="/static")
 
 

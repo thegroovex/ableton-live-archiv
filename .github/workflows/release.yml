@@ -1,6 +1,9 @@
-name: ZIP-Downloads (macOS + Windows)
-# Baut bei jedem Versions-Tag (v1.2.3) zwei fertige ZIPs und hängt sie an das GitHub-Release.
-# Auch manuell startbar (Actions → "ZIP-Downloads" → Run workflow); dann wird das Release "latest" aktualisiert.
+name: Release (Apps + ZIPs)
+# Baut bei jedem Versions-Tag (v1.2.3):
+#   • Standalone-Apps: macOS (.dmg, Apple Silicon) und Windows (Installer .exe) – ohne Python-Installation
+#   • die bisherigen ZIPs mit start.command / start.bat (Python nötig)
+# und hängt alles an das GitHub-Release. Manuell startbar (Actions → "Release" → Run workflow); dann wird "latest" aktualisiert.
+# Hinweis Actions-Minuten: der macOS-Build zählt 10-fach – deshalb nur bei Tags, nicht bei jedem Push.
 on:
   push:
     tags: ["v*"]
@@ -24,19 +27,66 @@ jobs:
           find dist -name "__pycache__" -type d -prune -exec rm -rf {} +
           (cd dist/mac && zip -qr -X ../Live-Archiv-macOS.zip Live-Archiv)
           (cd dist/win && zip -qr -X ../Live-Archiv-Windows.zip Live-Archiv)
-          ls -l dist/*.zip
+      - uses: actions/upload-artifact@v4
+        with: { name: zips, path: "dist/*.zip" }
+
+  app:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: "dist:mac", out: "desktop/release/*.dmg" }
+          - { os: windows-latest, target: "dist:win", out: "desktop/release/*.exe" }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: { shell: bash, working-directory: desktop }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Python-Server bündeln (PyInstaller)
+        run: |
+          pip install -r ../requirements.txt pyinstaller
+          pyinstaller --noconfirm --workpath pyi-work live-archiv-server.spec
+      - name: Selbsttest des gebündelten Servers
+        run: |
+          EXE=dist/live-archiv-server/live-archiv-server; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          LIVE_ARCHIV_HOME="$RUNNER_TEMP/la" LIVE_ARCHIV_PORT=5099 "$EXE" --no-browser > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:5099/ > /dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:5099/static/js/i18n.js > /dev/null || { cat "$RUNNER_TEMP/server.log"; exit 1; }
+          python -c "import urllib.request as u; u.urlopen(u.Request('http://127.0.0.1:5099/api/settings'))"
+          echo "Server läuft gebündelt."
+      - name: App bauen (Electron)
+        env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" }
+        run: |
+          npm install --no-audit --no-fund
+          npm run ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with: { name: "app-${{ matrix.os }}", path: "${{ matrix.out }}" }
+
+  publish:
+    needs: [zip, app]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: out, merge-multiple: true }
+      - run: ls -l out
       - name: Release veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
           name: ${{ github.ref_type == 'tag' && format('Live Archiv {0}', github.ref_name) || 'Live Archiv (aktueller Stand)' }}
           make_latest: true
-          files: |
-            dist/Live-Archiv-macOS.zip
-            dist/Live-Archiv-Windows.zip
+          files: out/*
           body: |
-            **Download**
-            - 🍎 macOS: `Live-Archiv-macOS.zip` → entpacken → `start.command` (beim ersten Mal Rechtsklick → Öffnen)
-            - 🪟 Windows: `Live-Archiv-Windows.zip` → entpacken → `start.bat`
+            **App (empfohlen, ohne Python) / App (recommended, no Python needed)**
+            - 🍎 macOS (Apple Silicon): `Live-Archiv-…-mac-arm64.dmg` → öffnen, „Live Archiv“ in „Programme“ ziehen. Beim ersten Start: Systemeinstellungen → Datenschutz & Sicherheit → „Dennoch öffnen“.
+            - 🪟 Windows 10/11: `Live-Archiv-…-win-x64.exe` → installieren. Bei SmartScreen „Weitere Informationen“ → „Trotzdem ausführen“.
 
-            Voraussetzung: Python 3.10+. Details im README (Deutsch) bzw. README.en.md (English).
+            **Skript-Version (wie bisher, Python 3.10+ nötig)**
+            - 🍎 `Live-Archiv-macOS.zip` → entpacken → `start.command`
+            - 🪟 `Live-Archiv-Windows.zip` → entpacken → `start.bat`
+
+            Beide Wege nutzen dieselbe Bibliothek in `~/LiveArchiv`. Details im README (Deutsch) bzw. README.en.md (English).

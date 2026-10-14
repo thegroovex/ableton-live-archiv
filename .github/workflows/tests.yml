@@ -21,4 +21,4 @@ jobs:
         run: node --test tests/js/*.test.js
       - name: Syntax-Check Frontend
         shell: bash
-        run: for f in static/js/*.js; do node --check "$f"; done
+        run: for f in static/js/*.js desktop/*.js; do node --check "$f"; done
