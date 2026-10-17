@@ -109,7 +109,7 @@ pip install -r requirements.txt pytest
 python -m pytest -v
 node --test tests/js/*.test.js
 ```
-Die Tests decken auch die App-Hülle ab (`tests/test_desktop.py`, `tests/js/desktop.test.js`). Bei jedem Push laufen sie in GitHub Actions auf macOS und Windows; das Repo ist öffentlich, die Builds kosten also keine Actions-Minuten.
+Die Tests decken auch die App-Hülle ab (`tests/test_desktop.py`, `tests/js/desktop.test.js`). Bei jedem Push laufen sie in GitHub Actions auf macOS und Windows (`.github/workflows/tests.yml`): parallel in Shards, mit pip-Cache, ein neuer Push bricht den alten Lauf ab, reine Doku-Änderungen überspringen die Tests, und der Paketier-Test der App läuft nur per PR-Label `installer`. Gesamtstatus: Check „CI result“.
 Die Tests laufen bei jedem Push automatisch auf macOS und Windows (GitHub Actions). Getestet werden Set-Parser, Klassifizierung, Datenbank und Suchfilter, alle API-Endpunkte, Audio-Analyse an synthetischen Tracks, der Render-Ablauf mit simuliertem Live, das AppleScript (Kompilierung auf macOS), der Windows-Export mit simuliertem Live, Playlists, das FLX4-MIDI-Mapping, die DJ-Logik, die Beatgrid-Erkennung, die Audio-Engine und die Übersetzung.
 
 ## Daten

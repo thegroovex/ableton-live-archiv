@@ -1,24 +1,138 @@
 name: Tests
-on: [push, pull_request]
+# CI-Aufbau (siehe ci-best-practices): changes → lint/js (schnell) | Python-Tests je OS in Shards → App-Smoke nur per Label → ein Gate "CI result".
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
-  test:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.f.outputs.code }}
+      desktop: ${{ steps.f.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            code:
+              - '**/*.py'
+              - 'static/**'
+              - 'core/**'
+              - 'tests/**'
+              - 'desktop/**'
+              - 'requirements.txt'
+              - 'start.*'
+              - '.github/workflows/**'
+            desktop:
+              - 'desktop/**'
+              - 'requirements.txt'
+              - 'core/**'
+              - 'app.py'
+
+  docs-only:
+    needs: changes
+    if: needs.changes.outputs.code != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Nur Doku geändert – Tests übersprungen."
+
+  js:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - name: Syntax-Check Frontend + Desktop
+        run: for f in static/js/*.js desktop/*.js; do node --check "$f"; done
+      - name: JavaScript-Tests (FLX4-Mapping, DJ-Logik, Audio-Engine, Übersetzung)
+        run: node --test tests/js/*.test.js
+
+  python:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]   # macOS ist führend, Windows läuft parallel
+        shard:
+          - { name: core, files: "tests/test_als_parser.py tests/test_db_and_api.py tests/test_matcher.py tests/test_playlists.py tests/test_desktop.py tests/test_windows_port.py" }
+          - { name: audio, files: "tests/test_audio_analysis.py tests/test_classify_analyzer.py tests/test_renderer.py" }
+    name: python (${{ matrix.os }}, ${{ matrix.shard.name }})
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - uses: actions/setup-node@v4
-        with: { node-version: "22" }
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
       - run: pip install -r requirements.txt pytest
-      - name: Python-Tests (Parser, Datenbank, API, Audio-Analyse, Renderer je System)
-        run: python -m pytest -v
-      - name: JavaScript-Tests (FLX4-Mapping, DJ-Logik, Audio-Engine, Übersetzung)
+      - name: Python-Tests (${{ matrix.shard.name }})
         shell: bash
-        run: node --test tests/js/*.test.js
-      - name: Syntax-Check Frontend
-        shell: bash
-        run: for f in static/js/*.js desktop/*.js; do node --check "$f"; done
+        run: python -m pytest -q ${{ matrix.shard.files }}
+
+  shard-check:
+    # Stellt sicher, dass jede Testdatei in genau einem Shard steckt.
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -e
+          W=.github/workflows/tests.yml
+          for f in tests/test_*.py; do
+            n=$(grep -o "$f" "$W" | wc -l); [ "$n" = 1 ] || { echo "::error::$f ist in $n Shards"; exit 1; }
+          done
+
+  app-smoke:
+    # Paketierung nur per PR-Label "installer" oder manuell – Releases baut release.yml bei Tags.
+    needs: [changes, python]
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'installer'))
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: { shell: bash, working-directory: desktop }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: requirements.txt }
+      - name: Python-Server bündeln (PyInstaller)
+        run: |
+          pip install -r ../requirements.txt pyinstaller
+          pyinstaller --noconfirm --workpath pyi-work live-archiv-server.spec
+      - name: Selbsttest des gebündelten Servers
+        run: |
+          EXE=dist/live-archiv-server/live-archiv-server; [ -f "$EXE.exe" ] && EXE="$EXE.exe"
+          LIVE_ARCHIV_HOME="$RUNNER_TEMP/la" LIVE_ARCHIV_PORT=5099 "$EXE" --no-browser > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:5099/ > /dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:5099/static/js/i18n.js > /dev/null || { cat "$RUNNER_TEMP/server.log"; exit 1; }
+
+  ci-result:
+    name: CI result
+    if: always()
+    needs: [changes, docs-only, js, python, shard-check, app-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          r='${{ toJSON(needs.*.result) }}'
+          echo "$r"
+          echo "$r" | grep -Eq '"(failure|cancelled)"' && { echo "::error::Ein Job ist fehlgeschlagen"; exit 1; } || echo "Alles grün."

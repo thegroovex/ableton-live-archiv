@@ -10,6 +10,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+  ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
 jobs:
   zip:
     runs-on: ubuntu-latest
@@ -43,9 +49,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with: { python-version: "3.12", cache: pip, cache-dependency-path: requirements.txt }
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
+      - name: Caches (npm, Electron, electron-builder)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            .cache/electron
+            .cache/electron-builder
+          key: electron-${{ runner.os }}-${{ hashFiles('desktop/package.json') }}-${{ github.run_id }}
+          restore-keys: |
+            electron-${{ runner.os }}-${{ hashFiles('desktop/package.json') }}-
+            electron-${{ runner.os }}-
       - name: Python-Server bündeln (PyInstaller)
         run: |
           pip install -r ../requirements.txt pyinstaller
