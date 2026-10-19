@@ -9,7 +9,7 @@ ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
 datas = [(os.path.join(ROOT, "static"), "static")]
 binaries = []
 hiddenimports = collect_submodules("core") + ["app", "soundfile", "audioread"]
-for pkg in ("librosa", "mutagen", "lazy_loader", "soxr", "_soundfile_data"):
+for pkg in ("librosa", "mutagen", "watchdog", "lazy_loader", "soxr", "_soundfile_data"):
     try:
         d, b, h = collect_all(pkg)
         datas += d; binaries += b; hiddenimports += h

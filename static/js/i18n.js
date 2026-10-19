@@ -33,6 +33,9 @@
     "Audio-Ausgang": "Audio output", "Neue Playlist – oder Tracks hierher ziehen": "New playlist – or drop tracks here",
     "Ein Pfad pro Zeile": "One path per line", "z. B. Nachtfahrt": "e.g. Night Drive", "durch Komma getrennt": "comma separated",
     "Sprache": "Language", "Automatisch": "Automatic",
+    "Auto-Erfassung": "Auto capture", "Neue und geänderte Sets automatisch erfassen – nur solange Ableton Live läuft": "Capture new and changed sets automatically – only while Ableton Live is running",
+    "Live läuft – neue und geänderte Sets werden automatisch erfasst": "Live is running – new and changed sets are captured automatically",
+    "Auto-Erfassung wartet auf Ableton Live": "Auto capture is waiting for Ableton Live", "Neu erfasst": "New", "Aktualisiert": "Updated",
     // Archiv
     "Neu rendern": "Re-render", "MP3 rendern": "Render MP3", "Die .als-Datei bleibt erhalten": "The .als file is kept",
     "Suche .als-Dateien …": "Searching for .als files …", "Alle Projekte haben schon ein MP3.": "All projects already have an MP3.",

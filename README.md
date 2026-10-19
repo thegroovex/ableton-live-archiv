@@ -32,6 +32,7 @@ Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/rel
 ## Funktionen
 **Archiv**
 - Scannt deine Projektordner nach `.als`-Sets (Backups werden ignoriert) und liest Tempo, Tonart (Live-12-Skala), Spuren, Clips, Länge, Automationen, Plug-ins und fehlende Samples – ohne Live zu öffnen.
+- **Auto-Erfassung (ressourcenschonend):** Nur solange Ableton Live läuft, beobachtet Live Archiv deine Projektordner über das Dateisystem (macOS FSEvents, Windows-Änderungsbenachrichtigung) – ohne Ordner zu durchsuchen. Speichert Live ein neues oder geändertes Set, wird nur dieses eine Set nach 20 Sekunden Ruhe eingelesen und erscheint sofort in der Liste. Rechenintensive Analyse wartet, bis Live beendet ist; gerendert wird nie automatisch. Ohne laufendes Live: nur ein Prozess-Check alle 15 Sekunden. Grüner Punkt in der Statusleiste = Live erkannt; abschaltbar unter ⚙ → Auto-Erfassung.
 - Exportiert jedes Set automatisch über Live 12 als MP3 (macOS: AppleScript, Windows: Win32-Tastatursteuerung des Export-Dialogs).
 - Analysiert die MP3s: Tonart (falls im Set nicht gesetzt), Energie, Stimmung, Genre-Vorschlag.
 - Einstufung „Fertig“ oder „Skizze“ anhand von Arrangement-Länge, Clips, Spuren, Automation und Dateiname.
@@ -121,6 +122,7 @@ Live Archiv ist ein Produkt von **BeatTactics** – *designed by groovex*. Logo 
 <p align="center"><img src="docs/brand/beattactics-logo-dark.png" width="360" alt="BeatTactics – designed by groovex"></p>
 
 ## Versionen
+- **v1.2.0** (19.10.2026): Auto-Erfassung neuer und geänderter Sets – nur solange Ableton Live läuft, Analyse erst nach dem Beenden von Live.
 - **v1.1.1** (15.10.2026): BeatTactics-Branding – neues App-Icon, Logo im Startbildschirm, in der Kopfzeile und in den Einstellungen, „Über Live Archiv“ im Hilfe-Menü.
 - **v1.1.0** (14.10.2026): Standalone-App für macOS (DMG, Apple Silicon) und Windows (Installer) – ohne Python-Installation, mit eigenem Fenster, Sprachmenü und mitgeliefertem ffmpeg. Skript-Start bleibt. Englische Übersetzung der Analyse-Meldungen ergänzt.
 - **v1.0.0** (11.10.2026): Archiv, MP3-Export, Analyse, DJ-Modus mit FLX4, Playlists, Deutsch/Englisch, macOS + Windows.

@@ -228,6 +228,50 @@ def job_analyze(ids):
     JOB.write("Analyse abgeschlossen.")
 
 
+# ---------------------------------------------------------------- Auto-Erfassung (nur solange Live läuft)
+from core.watcher import AutoWatcher
+
+AUTO = dict(rev=0, recent=[], deferred=set())
+
+
+def auto_set_changed(path):
+    """Live hat ein Set gespeichert: nur dieses eine Set einlesen (leicht), Analyse auf später verschieben."""
+    if path in db.hidden_paths():
+        return
+    known = db.db().execute("SELECT 1 FROM projects WHERE path=?", (path,)).fetchone() is not None
+    pid = index_set(path)
+    row = db.get(pid)
+    if not row.get("mp3_path") or not os.path.exists(row["mp3_path"]):
+        from core.matcher import find_existing_audio
+        audio = find_existing_audio(path)
+        if audio:
+            db.update(pid, {"mp3_path": audio, "error": None})
+            AUTO["deferred"].add(pid)
+    AUTO["rev"] += 1
+    AUTO["recent"] = ([dict(id=pid, name=row.get("name") or os.path.basename(path), new=not known,
+                            time=time.strftime("%H:%M"))] + AUTO["recent"])[:20]
+
+
+def auto_live_closed():
+    """Live wurde beendet: jetzt darf die rechenintensive Analyse laufen – aber nie neben einem anderen Job."""
+    ids = sorted(AUTO["deferred"])
+    if ids and run_job("Analyse", job_analyze, ids):
+        AUTO["deferred"].clear()
+
+
+WATCH = AutoWatcher(
+    get_roots=lambda: db.load_settings().get("roots") or [],
+    on_set_changed=auto_set_changed,
+    on_live_closed=auto_live_closed,
+    is_enabled=lambda: bool(db.load_settings().get("auto_watch", True)),
+)
+
+
+@app.get("/api/watch")
+def api_watch():
+    return jsonify(dict(WATCH.state(), rev=AUTO["rev"], recent=AUTO["recent"][:5]))
+
+
 # ---------------------------------------------------------------- Routen
 @app.get("/")
 def index():
@@ -299,7 +343,10 @@ def api_facets():
 
 @app.get("/api/job")
 def api_job():
-    return jsonify(JOB.state())
+    st = JOB.state()
+    st["watch"] = dict(enabled=bool(db.load_settings().get("auto_watch", True)), live=WATCH.live,
+                       rev=AUTO["rev"], recent=AUTO["recent"][:1])
+    return jsonify(st)
 
 
 @app.post("/api/job/cancel")
@@ -363,7 +410,9 @@ def api_settings():
 
 @app.post("/api/settings")
 def api_settings_save():
-    return jsonify(db.save_settings(request.json or {}))
+    out = db.save_settings(request.json or {})
+    WATCH.poke()
+    return jsonify(out)
 
 
 @app.post("/api/create")
@@ -740,6 +789,7 @@ def open_browser(url):
 def main():
     port = int(os.environ.get("LIVE_ARCHIV_PORT", "5077"))
     url = f"http://127.0.0.1:{port}"
+    WATCH.start()  # beobachtet nur, solange Ableton Live läuft
     if "--no-browser" not in sys.argv:
         threading.Timer(1.2, lambda: open_browser(url)).start()
     print(f"Live Archiv läuft auf {url}  (Beenden mit Ctrl+C)")

@@ -61,8 +61,23 @@ async function pollJob() {
     if (jobWasRunning && !j.running) { jobListeners.forEach(fn => fn(j)); toast(last.slice(9)); setTimeout(() => { if (!jobWasRunning) $("#job-bar").style.width = "0%"; }, 3000); }
     jobWasRunning = j.running;
     if (j.running && j.done % 5 === 0) jobListeners.forEach(fn => fn(j, true));
+    showWatch(j.watch);
   } catch (e) { /* Server neu gestartet */ }
   pollTimer = setTimeout(pollJob, jobWasRunning ? 400 : 3000);
+}
+// Auto-Erfassung: Statuspunkt und Liste neu laden, sobald Live ein Set gespeichert hat
+let watchRev = null;
+function showWatch(w) {
+  const dot = $("#watch-dot"); if (!dot || !w) return;
+  dot.hidden = !w.enabled;
+  dot.classList.toggle("live", !!w.live);
+  dot.title = w.live ? t("Live läuft – neue und geänderte Sets werden automatisch erfasst") : t("Auto-Erfassung wartet auf Ableton Live");
+  if (watchRev !== null && w.rev !== watchRev) {
+    jobListeners.forEach(fn => fn(w));
+    const r = (w.recent || [])[0];
+    if (r) toast((r.new ? t("Neu erfasst") : t("Aktualisiert")) + ": " + r.name);
+  }
+  watchRev = w.rev;
 }
 $("#btn-cancel").onclick = () => api("/api/job/cancel", { method: "POST" });
 pollJob();

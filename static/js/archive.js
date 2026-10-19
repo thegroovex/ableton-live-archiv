@@ -221,6 +221,7 @@ $("#btn-settings").onclick = async () => {
   const s = await api("/api/settings");
   $("#s-lang").value = localStorage.getItem("lang") || "";
   $("#s-roots").value = s.roots.join("\n"); $("#s-live").value = s.live_app; $("#s-template").value = s.template; $("#s-newdir").value = s.new_project_dir;
+  if ($("#s-autowatch")) $("#s-autowatch").checked = s.auto_watch !== false;
   openModal("#m-settings");
 };
 if ($("#s-unhide")) $("#s-unhide").onclick = async () => {
@@ -228,7 +229,7 @@ if ($("#s-unhide")) $("#s-unhide").onclick = async () => {
   alert(`${r.restored} entfernte Projekte kommen beim nächsten Scan zurück.`);
 };
 $("#s-save").onclick = async () => {
-  await api("/api/settings", { method: "POST", body: { roots: $("#s-roots").value.split("\n").map(s => s.trim()).filter(Boolean), live_app: $("#s-live").value, template: $("#s-template").value, new_project_dir: $("#s-newdir").value } });
+  await api("/api/settings", { method: "POST", body: { roots: $("#s-roots").value.split("\n").map(s => s.trim()).filter(Boolean), live_app: $("#s-live").value, template: $("#s-template").value, new_project_dir: $("#s-newdir").value, auto_watch: $("#s-autowatch") ? $("#s-autowatch").checked : true } });
   if (($("#s-lang").value || "") !== (localStorage.getItem("lang") || "")) { api("/api/settings", { method: "POST", body: { lang: $("#s-lang").value } }); setLang($("#s-lang").value); }
   closeModals();
 };

@@ -68,7 +68,7 @@ jobs:
       matrix:
         os: [macos-latest, windows-latest]   # macOS ist führend, Windows läuft parallel
         shard:
-          - { name: core, files: "tests/test_als_parser.py tests/test_db_and_api.py tests/test_matcher.py tests/test_playlists.py tests/test_desktop.py tests/test_windows_port.py" }
+          - { name: core, files: "tests/test_als_parser.py tests/test_db_and_api.py tests/test_matcher.py tests/test_playlists.py tests/test_desktop.py tests/test_windows_port.py tests/test_watcher.py" }
           - { name: audio, files: "tests/test_audio_analysis.py tests/test_classify_analyzer.py tests/test_renderer.py" }
     name: python (${{ matrix.os }}, ${{ matrix.shard.name }})
     runs-on: ${{ matrix.os }}

@@ -14,7 +14,7 @@ SETTINGS_PATH = os.path.join(HOME, "settings.json")
 
 from core.platform_util import default_settings as _defaults
 
-DEFAULT_SETTINGS = {**_defaults(), "lang": ""}
+DEFAULT_SETTINGS = {**_defaults(), "lang": "", "auto_watch": True}
 
 COLUMNS = {
     "path": "TEXT UNIQUE", "name": "TEXT", "folder": "TEXT", "mtime": "REAL", "size": "INTEGER",

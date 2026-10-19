@@ -100,6 +100,7 @@
 </div>
 
 <div class="statusbar">
+  <span id="watch-dot" class="watch-dot" hidden title=""></span>
   <span id="job-text">Bereit</span>
   <div class="progress"><div id="job-bar"></div></div>
   <button class="btn small" id="btn-cancel" hidden>Abbrechen</button>
@@ -116,6 +117,7 @@
     <label>Live-App</label><input class="field" id="s-live">
     <label>Vorlage (.als)</label><input class="field" id="s-template" placeholder="~/Music/Ableton/User Library/Templates/Default.als">
     <label>Neue Projekte in</label><input class="field" id="s-newdir">
+    <label>Auto-Erfassung</label><label class="check"><input type="checkbox" id="s-autowatch"> Neue und geänderte Sets automatisch erfassen – nur solange Ableton Live läuft</label>
     <label>Entfernte Projekte</label><button class="btn small" id="s-unhide" type="button">Wieder anzeigen</button>
     <label>Layout</label><button class="btn small" id="s-layout-reset" type="button">Blockgrößen zurücksetzen</button>
     <div class="brandline" data-noi18n>Live Archiv · <b>BeatTactics</b> · designed by groovex</div>

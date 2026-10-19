@@ -32,6 +32,7 @@ All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/relea
 ## Features
 **Archive**
 - Scans your project folders for `.als` sets (backups are ignored) and reads tempo, key (Live 12 scale), tracks, clips, length, automation, plug-ins and missing samples – without opening Live.
+- **Auto capture (resource-friendly):** Only while Ableton Live is running, Live Archiv watches your project folders through the file system (macOS FSEvents, Windows change notifications) – without crawling folders. When Live saves a new or changed set, just that one set is read after 20 seconds of quiet and shows up in the list right away. CPU-heavy analysis waits until Live has quit; nothing is ever rendered automatically. Without Live running: just one process check every 15 seconds. Green dot in the status bar = Live detected; can be turned off under ⚙ → Auto capture.
 - Exports every set to MP3 automatically through Live 12 (macOS: AppleScript, Windows: Win32 keyboard control of the export dialog).
 - Analyzes the MP3s: key (if not set in the project), energy, mood, genre suggestion.
 - Rates sets as “Finished” or “Sketch” based on arrangement length, clips, tracks, automation and file name.
@@ -121,6 +122,7 @@ Live Archiv is a **BeatTactics** product – *designed by groovex*. Logo and ico
 <p align="center"><img src="docs/brand/beattactics-logo-dark.png" width="360" alt="BeatTactics – designed by groovex"></p>
 
 ## Versions
+- **v1.2.0** (Oct 19, 2026): Auto capture of new and changed sets – only while Ableton Live is running, analysis only after Live has quit.
 - **v1.1.1** (Oct 15, 2026): BeatTactics branding – new app icon, logo on the splash screen, in the top bar and in Settings, “About Live Archiv” in the Help menu.
 - **v1.1.0** (Oct 14, 2026): Standalone app for macOS (DMG, Apple Silicon) and Windows (installer) – no Python install needed, own window, language menu and bundled ffmpeg. The script start stays. English translation of the analysis messages added.
 - **v1.0.0** (Oct 11, 2026): Archive, MP3 export, analysis, DJ mode with FLX4, playlists, German/English, macOS + Windows.
