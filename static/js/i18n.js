@@ -100,6 +100,8 @@
     "Tastatur": "Keyboard", "Taste": "Key", "Funktion": "Function", "Schließen": "Close",
     // Server
     "Abgebrochen.": "Cancelled.", "Warte auf letzte Analysen …": "Waiting for last analyses …", "Rendern abgeschlossen.": "Rendering finished.",
+    "Rendern braucht die Bedienungshilfen: Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen → „Live Archiv“ einschalten. Nach einer Neuinstallation den alten Eintrag mit „–“ entfernen und die App neu hinzufügen.": "Rendering needs Accessibility: System Settings → Privacy & Security → Accessibility → turn on “Live Archiv”. After reinstalling, remove the old entry with “–” and add the app again.",
+    "Rendern braucht die Automation: Systemeinstellungen → Datenschutz & Sicherheit → Automation → bei „Live Archiv“ „System Events“ einschalten.": "Rendering needs Automation: System Settings → Privacy & Security → Automation → turn on “System Events” for “Live Archiv”.",
     "Analyse abgeschlossen.": "Analysis finished.", "kein Audio": "no audio", "Import abgeschlossen.": "Import finished.",
     "Bitte warten, bis der laufende Vorgang fertig ist.": "Please wait until the current job has finished.",
     "Ableton Live ist noch offen. Bitte deine Sets speichern und Live beenden.": "Ableton Live is still open. Please save your sets and quit Live.",

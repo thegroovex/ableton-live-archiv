@@ -112,3 +112,38 @@ def test_falls_back_to_restart_when_dialog_sticks(monkeypatch):
     monkeypatch.setattr(renderer, "_find_save_dialog", lambda: (533, 440, 504, 149))
     monkeypatch.setattr(renderer, "_dismiss_save_dialog", lambda: "still-open")
     assert renderer._try_switch_with_dialog("/x/A.als", "Ableton Live 12 Suite", log=lambda m: None) is False
+
+
+# ---------------------------------------------------------------- macOS-Freigaben vor dem Rendern
+import pytest as _pytest
+from core import renderer as _mac
+
+
+@_pytest.mark.parametrize("err,kind", [
+    ("execution error: Not authorized to send Apple events to System Events. (-1743)", "automation"),
+    ("System Events got an error: osascript is not allowed assistive access. (-25211)", "accessibility"),
+    ("System Events hat einen Fehler erhalten: „osascript“ ist kein Hilfszugriff erlaubt. (-1719)", "accessibility"),
+    ("irgendwas anderes", "other"),
+])
+def test_check_permissions_erkennt_fehlende_freigabe(monkeypatch, err, kind):
+    def boom(*a, **k):
+        raise RuntimeError(err)
+    monkeypatch.setattr(_mac, "_osa", boom)
+    assert _mac.check_permissions()[0] == kind
+
+
+def test_check_permissions_ok(monkeypatch):
+    monkeypatch.setattr(_mac, "_osa", lambda *a, **k: "12")
+    assert _mac.check_permissions() is None
+
+
+def test_rendern_bricht_ohne_freigabe_mit_hinweis_ab(home, monkeypatch):
+    import app
+    opened = []
+    monkeypatch.setattr(app.renderer, "check_permissions", lambda: ("accessibility", _mac.MSG_ACCESSIBILITY))
+    monkeypatch.setattr(app.renderer, "open_permission_settings", opened.append)
+    monkeypatch.setattr(app.renderer, "render_set", lambda *a, **k: (_ for _ in ()).throw(AssertionError("darf nicht rendern")))
+    app.JOB.reset()
+    app.job_render([1], analyze_after=False)
+    assert opened == ["accessibility"]
+    assert "Bedienungshilfen" in app.JOB.log[-1]

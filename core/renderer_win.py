@@ -247,6 +247,15 @@ def _wait_until_idle(log=print, max_wait: int = 45) -> None:
 
 
 # ---------------------------------------------------------------- Rendern
+def check_permissions():
+    """Windows braucht keine Freigabe für die Tastatursteuerung."""
+    return None
+
+
+def open_permission_settings(kind: str) -> None:
+    pass
+
+
 def render_set(als_path: str, out_dir: str, out_name: str, app_name: str = "Ableton Live 12 Suite",
                load_timeout: int = 180, render_timeout: int = 900, start_timeout: int = 150, log=print) -> str:
     """Öffnet das Set in Live, exportiert es und gibt den Pfad zur MP3 zurück."""

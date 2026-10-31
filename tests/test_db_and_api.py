@@ -91,6 +91,8 @@ def test_render_job_with_fake_live(home, tmp_path, make_set, monkeypatch):
     c = appmod.app.test_client()
     c.post("/api/scan", json={"roots": [str(lib)]}); wait_job(c)
 
+    monkeypatch.setattr(appmod.renderer, "check_permissions", lambda: None)
+
     def fake_render(als, out_dir, name, app_name=None, log=print):
         os.makedirs(out_dir, exist_ok=True)
         return write_tone(os.path.join(out_dir, name + ".mp3.wav"), bpm=124, seconds=8)

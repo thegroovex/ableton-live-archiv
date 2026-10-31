@@ -1,7 +1,7 @@
 // Live Archiv als eigenständige App (macOS + Windows).
 // Startet den Python-Server unsichtbar im Hintergrund und zeigt die Oberfläche in einem eigenen Fenster
 // (Chromium: Web MIDI für den FLX4 und Wahl des Audio-Ausgangs funktionieren wie in Chrome).
-const { app, BrowserWindow, session, shell, Menu, dialog } = require("electron");
+const { app, BrowserWindow, session, shell, Menu, dialog, systemPreferences } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -138,7 +138,37 @@ async function createWindow() {
   await win.loadURL(base + "/");
 }
 
-app.whenReady().then(() => { buildMenu(); createWindow(); });
+// macOS: Rendern steuert Live per AppleScript/System Events. Dafür braucht die App Bedienungshilfen
+// und Automation. Nach einer Neuinstallation (neue Ad-hoc-Signatur) gilt ein alter Eintrag nicht mehr,
+// macOS fragt aber nicht von selbst. Deshalb einmal pro App-Version aktiv nachfragen.
+function askMacPermissions() {
+  if (process.platform !== "darwin") return;
+  const flag = path.join(app.getPath("userData"), `permissions-asked-${app.getVersion()}`);
+  if (systemPreferences.isTrustedAccessibilityClient(false)) {
+    // Automation-Abfrage (System Events) einmal auslösen, falls noch nicht erteilt
+    if (!fs.existsSync(flag)) spawn("osascript", ["-e", 'tell application "System Events" to count processes'], { stdio: "ignore" });
+    try { fs.writeFileSync(flag, "1"); } catch (e) { /* egal */ }
+    return;
+  }
+  if (fs.existsSync(flag)) return;
+  try { fs.mkdirSync(path.dirname(flag), { recursive: true }); fs.writeFileSync(flag, "1"); } catch (e) { /* egal */ }
+  // veralteten Eintrag einer früheren Installation entfernen, damit die neue App sauber erscheint
+  const reset = spawn("tccutil", ["reset", "Accessibility", "com.beattactics.livearchiv"], { stdio: "ignore" });
+  reset.on("error", () => {});
+  reset.on("exit", () => {
+    dialog.showMessageBox({
+      type: "info", buttons: ["Freigeben / Allow", "Später / Later"], defaultId: 0, cancelId: 1,
+      message: "Live Archiv braucht die Bedienungshilfen, um Sets in Ableton Live als MP3 zu exportieren.",
+      detail: "Systemeinstellungen → Datenschutz & Sicherheit → Bedienungshilfen → „Live Archiv“ einschalten. Danach fragt macOS noch nach „System Events“ – bitte erlauben.\n\nLive Archiv needs Accessibility to export your sets from Ableton Live. Turn on “Live Archiv”, then allow “System Events”.",
+    }).then(({ response }) => {
+      if (response !== 0) return;
+      systemPreferences.isTrustedAccessibilityClient(true);  // zeigt die System-Abfrage und trägt die App ein
+      spawn("osascript", ["-e", 'tell application "System Events" to count processes'], { stdio: "ignore" });
+    });
+  });
+}
+
+app.whenReady().then(() => { buildMenu(); createWindow(); setTimeout(askMacPermissions, 1500); });
 app.on("window-all-closed", () => app.quit());
 app.on("before-quit", stopServer);
 app.on("will-quit", stopServer);

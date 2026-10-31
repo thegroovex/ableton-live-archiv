@@ -71,7 +71,7 @@ Alle Versionen: [Releases](https://github.com/thegroovex/ableton-live-archiv/rel
 ## Einmalige Einrichtung
 - ⚙ Einstellungen: Sprache (Automatisch/Deutsch/English, auch per DE/EN-Knopf oben rechts), Projektordner (macOS z. B. `~/Music/Ableton`, Windows z. B. `~/Documents/Ableton`), Vorlage `.als` für neue Projekte, Name der Live-App (z. B. „Ableton Live 12 Suite“).
 - In Live einmal „Audio/Video exportieren“ (macOS ⇧⌘R, Windows Strg+Shift+R) öffnen: Gerenderte Spur „Main“, ganzes Arrangement, **MP3 kodieren** an. Live merkt sich das.
-- **Nur macOS:** Für den automatischen Export Systemeinstellungen → Datenschutz & Sicherheit → **Bedienungshilfen** erlauben – für die App „Live Archiv“, beim Skript-Start „Terminal“. Beim ersten Export fragt macOS außerdem, ob Live Archiv „System Events“ bzw. Ableton Live steuern darf: erlauben.
+- **Nur macOS:** Für den automatischen Export Systemeinstellungen → Datenschutz & Sicherheit → **Bedienungshilfen** erlauben – für die App „Live Archiv“, beim Skript-Start „Terminal“. Beim ersten Export fragt macOS außerdem, ob Live Archiv „System Events“ bzw. Ableton Live steuern darf: erlauben. Die App fragt beim ersten Start jeder neuen Version selbst nach. Fehlt eine Freigabe, bricht „MP3s rendern“ mit einem Hinweis ab und öffnet die passende Systemeinstellung. **Nach einer Neuinstallation** gilt der alte Eintrag unter Bedienungshilfen nicht mehr (die App ist nicht notarisiert): den Eintrag „Live Archiv“ mit „–“ entfernen und die App mit „+“ neu hinzufügen.
 - **Nur Windows:** Live wird unter `C:\ProgramData\Ableton\…` gesucht, sonst über die `.als`-Dateizuordnung gestartet. Zwischen zwei Sets wird Live beendet und frisch gestartet (Rendern startet nur bei geschlossenem Live, es geht also nichts verloren).
 - Während des Renderns Maus und Tastatur nicht benutzen.
 
@@ -122,6 +122,7 @@ Live Archiv ist ein Produkt von **BeatTactics** – *designed by groovex*. Logo 
 <p align="center"><img src="docs/brand/beattactics-logo-dark.png" width="360" alt="BeatTactics – designed by groovex"></p>
 
 ## Versionen
+- **v1.2.1** (31.10.2026): macOS-Freigaben werden geprüft. Die App fragt Bedienungshilfen und Automation aktiv ab und bricht das Rendern ohne Freigabe mit klarem Hinweis ab, statt auf „kein Fenster“ zu warten.
 - **v1.2.0** (19.10.2026): Auto-Erfassung neuer und geänderter Sets – nur solange Ableton Live läuft, Analyse erst nach dem Beenden von Live.
 - **v1.1.1** (15.10.2026): BeatTactics-Branding – neues App-Icon, Logo im Startbildschirm, in der Kopfzeile und in den Einstellungen, „Über Live Archiv“ im Hilfe-Menü.
 - **v1.1.0** (14.10.2026): Standalone-App für macOS (DMG, Apple Silicon) und Windows (Installer) – ohne Python-Installation, mit eigenem Fenster, Sprachmenü und mitgeliefertem ffmpeg. Skript-Start bleibt. Englische Übersetzung der Analyse-Meldungen ergänzt.

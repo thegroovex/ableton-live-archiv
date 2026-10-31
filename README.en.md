@@ -71,7 +71,7 @@ All versions: [Releases](https://github.com/thegroovex/ableton-live-archiv/relea
 ## One-time setup
 - ⚙ Settings: language (automatic/German/English, or the DE/EN button top right), project folders (macOS e.g. `~/Music/Ableton`, Windows e.g. `~/Documents/Ableton`), `.als` template for new projects, Live app name (e.g. “Ableton Live 12 Suite”).
 - Open “Export Audio/Video” in Live once (macOS ⇧⌘R, Windows Ctrl+Shift+R): rendered track “Main”, whole arrangement, **Encode MP3** on. Live remembers this.
-- **macOS only:** for the automatic export allow System Settings → Privacy & Security → **Accessibility** – for the app “Live Archiv”, for the script start “Terminal”. On the first export macOS also asks whether Live Archiv may control “System Events” and Ableton Live: allow it.
+- **macOS only:** for the automatic export allow System Settings → Privacy & Security → **Accessibility** – for the app “Live Archiv”, for the script start “Terminal”. On the first export macOS also asks whether Live Archiv may control “System Events” and Ableton Live: allow it. The app asks for this itself on the first start of every new version. If a permission is missing, “Render MP3s” stops with a hint and opens the matching settings page. **After reinstalling**, the old Accessibility entry no longer applies (the app is not notarized): remove “Live Archiv” with “–” and add the app again with “+”.
 - **Windows only:** Live is looked up under `C:\ProgramData\Ableton\…`, otherwise started through the `.als` file association. Between two sets Live is quit and restarted (rendering only starts while Live is closed, so nothing is lost).
 - Don't use mouse and keyboard while rendering.
 
@@ -122,6 +122,7 @@ Live Archiv is a **BeatTactics** product – *designed by groovex*. Logo and ico
 <p align="center"><img src="docs/brand/beattactics-logo-dark.png" width="360" alt="BeatTactics – designed by groovex"></p>
 
 ## Versions
+- **v1.2.1** (Oct 31, 2026): macOS permissions are checked. The app actively asks for Accessibility and Automation and stops rendering with a clear hint instead of waiting on “no window”.
 - **v1.2.0** (Oct 19, 2026): Auto capture of new and changed sets – only while Ableton Live is running, analysis only after Live has quit.
 - **v1.1.1** (Oct 15, 2026): BeatTactics branding – new app icon, logo on the splash screen, in the top bar and in Settings, “About Live Archiv” in the Help menu.
 - **v1.1.0** (Oct 14, 2026): Standalone app for macOS (DMG, Apple Silicon) and Windows (installer) – no Python install needed, own window, language menu and bundled ffmpeg. The script start stays. English translation of the analysis messages added.

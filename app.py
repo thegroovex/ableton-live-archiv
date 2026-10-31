@@ -154,6 +154,13 @@ def job_render(ids, analyze_after=True):
     import queue
     s = db.load_settings()
     JOB.total = len(ids)
+    problem = renderer.check_permissions()  # ohne macOS-Freigabe sähe Live Archiv kein Live-Fenster
+    if problem:
+        kind, msg = problem
+        JOB.write(msg)
+        if kind != "other":          # unklarer Fehler: trotzdem versuchen, Live meldet sich dann selbst
+            renderer.open_permission_settings(kind)
+            return
     todo: "queue.Queue[int | None]" = queue.Queue()
 
     def analyst():

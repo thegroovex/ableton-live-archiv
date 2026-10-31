@@ -1,8 +1,8 @@
 """Automatischer Export über Ableton Live 12 (macOS, per AppleScript/System Events).
 
 Voraussetzungen (einmalig):
-  * Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen: Terminal (bzw. die App,
-    aus der Live Archiv gestartet wird) erlauben.
+  * Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen und > Automation (System Events):
+    Terminal bzw. die App „Live Archiv“ erlauben. check_permissions() prüft das vor jedem Rendern.
   * In Live einmal manuell "Audio/Video exportieren" öffnen und einstellen:
       Gerenderte Spur: Main, Render-Start/-Länge: ganzes Arrangement,
       "MP3 kodieren" an (WAV/PCM darf aus). Live merkt sich diese Einstellungen.
@@ -17,6 +17,38 @@ import time
 import unicodedata
 
 LIVE_PROCESS = "Live"
+
+MSG_ACCESSIBILITY = ("Rendern braucht die Bedienungshilfen: Systemeinstellungen → Datenschutz & Sicherheit → "
+                     "Bedienungshilfen → „Live Archiv“ einschalten. Nach einer Neuinstallation den alten Eintrag "
+                     "mit „–“ entfernen und die App neu hinzufügen.")
+MSG_AUTOMATION = ("Rendern braucht die Automation: Systemeinstellungen → Datenschutz & Sicherheit → Automation → "
+                  "bei „Live Archiv“ „System Events“ einschalten.")
+SETTINGS_URL = {
+    "accessibility": "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+    "automation": "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+}
+
+
+def check_permissions() -> tuple[str, str] | None:
+    """Prüft vor dem Rendern, ob macOS die Fernsteuerung erlaubt. None = alles gut, sonst (Art, Meldung).
+    Ohne Bedienungshilfen liefert System Events sonst nur leere Fensterlisten („kein Fenster“)."""
+    try:
+        _osa('tell application "System Events" to count UI elements of process "Dock"', timeout=20)
+        return None
+    except Exception as exc:
+        msg = str(exc)
+    low = msg.lower()
+    if "-1743" in msg or "not authorized to send apple events" in low or "keine berechtigung" in low:
+        return "automation", MSG_AUTOMATION
+    if "-25211" in msg or "-1719" in msg or "assistive" in low or "hilfszugriff" in low or "bedienungshilfen" in low:
+        return "accessibility", MSG_ACCESSIBILITY
+    return "other", f"AppleScript-Fehler: {msg}"
+
+
+def open_permission_settings(kind: str) -> None:
+    url = SETTINGS_URL.get(kind)
+    if url:
+        subprocess.Popen(["open", url])
 
 
 def _n(text: str) -> str:
